@@ -1,0 +1,13 @@
+name = "UncertaintyOptimization"
+uuid = "39e91f5d-ae59-4074-98e9-c7ab900f6468"
+authors = ["Michal Kobiela <michal@walls.com.pl> and contributors"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
