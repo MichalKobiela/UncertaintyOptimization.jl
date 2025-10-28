@@ -15,8 +15,8 @@ include("../src/ModelLoader.jl")
     @test occursin("❌  File with the name $missing_file not found, please check if the input path is correct and the file exists",output.output)
     
     # Test that it loads an a real file returning a Dict
-    real_file = "test/test-data/test_RPA.yml"
-    config = load_YAML(real_file)
+    filename = joinpath(@__DIR__, "test-data", "test_RPA.yml")
+    config = load_YAML(filename)
     @test config isa Dict
 
 end
