@@ -10,7 +10,10 @@ The aim of this module is to be responsible for reading in a YAML and creating t
     OUTPUT: Struct
 """
 
-# Struct for each parameter
+# -------------------------------------------------------------------------
+# Struct Definitions
+# -------------------------------------------------------------------------
+
 struct ParameterSpec
     name::String # paramater name
     symbol::Symbol # parameter symbolic
@@ -29,6 +32,18 @@ struct ModelDefinition
     input::Any
 end
 
+
+# -------------------------------------------------------------------------
+# Utility Functions
+# -------------------------------------------------------------------------
+
+"""
+    load_YAML(filename::String) -> Dict
+
+Loads and parses a YAML file. Throws an error if the file does not exist.
+
+"""
+
 function load_YAML(filename:: String)
     if isfile(filename)
         return YAML.load_file(filename)
@@ -38,7 +53,47 @@ function load_YAML(filename:: String)
     end
 end
 
-# Builds a Dict of symbolic forms of YAML inputs to be used later
+
+# -------------------------------------------------------------------------
+# Validation
+# -------------------------------------------------------------------------
+
+"""
+    validate_YAML(config::Dict)
+
+"""
+function validate_YAML(config::Dict)
+    # Check the required tags are there
+    required_tags = ["experiment", "model", "parameters", "equations"]
+    for tag in required_tags
+        if !haskey(config, tag)
+            println(tag)
+            error(:"❌ Missing required section in YAML: '$tag'")
+        end
+    end
+
+    # Check that the states in the equations match the states in the model and syntax is okay
+    eqs = config["equations"]
+    for (state, eq_str) in eqs
+        if !(state in model_cfg["states"])
+            error("❌ Equation in YAML references undefined state: $state")
+        end
+        try
+            Meta.parse(eq_str)
+        catch e
+            error("❌ Invalid syntax in YAML equation for $state: $(e.msg)")
+        end
+    end
+    
+    println("✅ Valid YAML")
+    return true
+
+end
+
+# -------------------------------------------------------------------------
+# Model Symbolic Construction
+# -------------------------------------------------------------------------
+
 function build_symbolics(config::Dict) 
 
     # Symbolic states
@@ -69,7 +124,10 @@ function build_symbolics(config::Dict)
 
 end
 
-# Build an equation but also handle any missing paramaters or mismatched/unused parameters
+# -------------------------------------------------------------------------
+# Equation Construction
+# -------------------------------------------------------------------------
+
 
 function build_equations(config::Dict, state_map::Dict, param_specs::Dict, input)
 
@@ -118,6 +176,10 @@ function build_equations(config::Dict, state_map::Dict, param_specs::Dict, input
 
 end
 
+# -------------------------------------------------------------------------
+# Model Info Extraction
+# -------------------------------------------------------------------------
+
 function get_model_info(config::Dict)
 
     exp_cfg = get(config, "experiment", Dict())
@@ -131,34 +193,6 @@ function get_model_info(config::Dict)
             model_type=model_type, 
             u0=u0,
             tspan=tspan)
-
-end
-
-function validate_YAML(config::Dict)
-    # Check the required tags are there
-    required_tags = ["experiment", "model", "parameters", "equations"]
-    for tag in required_tags
-        if !haskey(config, tag)
-            println(tag)
-            error(:"❌ Missing required section in YAML: '$tag'")
-        end
-    end
-
-    # Check that the states in the equations match the states in the model and syntax is okay
-    eqs = config["equations"]
-    for (state, eq_str) in eqs
-        if !(state in model_cfg["states"])
-            error("❌ Equation in YAML references undefined state: $state")
-        end
-        try
-            Meta.parse(eq_str)
-        catch e
-            error("❌ Invalid syntax in YAML equation for $state: $(e.msg)")
-        end
-    end
-    
-    println("✅ Valid YAML")
-    return true
 
 end
 
