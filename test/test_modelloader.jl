@@ -15,7 +15,7 @@ include("../src/ModelLoader.jl")
     @test occursin("❌  File with the name $missing_file not found, please check if the input path is correct and the file exists",output.output)
     
     # Test that it loads an a real file returning a Dict
-    real_file = "tests/data/test_RPA.yml"
+    real_file = "test/test-data/test_RPA.yml"
     config = load_YAML(real_file)
     @test config isa Dict
 
@@ -42,12 +42,12 @@ end
     symbolics = build_symbolics(config)
 
     # Check the structure 
-    @test all(k -> k in (:states, :parameters, :input), keys(syms))
+    @test all(k -> k in (:states, :parameters, :input), keys(symbolics ))
     
     # Check that it returns all symbolics
-    @test all(v -> v isa ParameterSpec, values(syms.parameters))
-    @test all(v -> v.symbol isa Symbol, values(syms.parameters))
-    @test all(v -> v isa Num, values(syms.states))
+    @test all(v -> v isa ParameterSpec, values(symbolics.parameters))
+    @test all(v -> v.symbol isa Symbol, values(symbolics.parameters))
+    @test all(v -> v isa Num, values(symbolics.states))
     @test symbolics[:input] isa Num
     @test occursin("ifelse", string(symbolics[:input]))
 
