@@ -143,7 +143,7 @@ function validate_YAML(config::Dict)
             error(:"❌ Missing required section in YAML: '$tag'")
         end
     end
-    
+
     # Check that the states in the equations match the states in the model and syntax is okay
     eqs = config["equations"]
     for (state, eq_str) in eqs
@@ -162,3 +162,34 @@ function validate_YAML(config::Dict)
 
 end
 
+# -------------------------------------------------------------------------
+# Public API
+# -------------------------------------------------------------------------
+
+"""
+    load_model_from_yaml(filename::String) -> ModelDefinition
+
+Main entry point: loads, validates, and constructs a full model definition
+from a YAML file.
+
+"""
+
+function load_model_from_yaml(filename::String)
+
+    config = load_YAML(filename)
+    validate_YAML(config)
+
+    info = get_model_info(config)
+    syms = build_symbolics(config)
+    eqs = build_equations(config, syms.states, syms.parameters, syms.input)
+
+    return ModelDefinition(info.model_name,
+                           info.model_description,
+                           info.model_type,
+                           eqs,
+                           syms.parameters,
+                           syms.input)
+
+
+
+end
