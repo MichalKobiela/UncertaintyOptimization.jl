@@ -4,6 +4,8 @@ using ModelingToolkit
 using IOCapture
 include("../src/ModelLoader.jl")
 
+
+
 @testset "YAML Loading" begin
     # Test for missing file and an error being gracefully handled
     missing_file = "i-dont-exists-file.yml"
@@ -21,9 +23,25 @@ include("../src/ModelLoader.jl")
 
 end
 
+@testset "Symbolics conversion" begin
+
+    param = create_param("k")
+    @parameters k
+
+    @test isequal(param,k)
+
+    var = create_param("A")
+    @variables A
+
+    @test isequal(var,A)
+
+    
+end
+
 # Tests the build symbolics function to make sure that they are being set correctly
 @testset "Build Symbolics" begin
-    
+
+
     config = Dict(
         "parameters" => Dict(
             "k1" => Dict("role"=>"fixed","value"=>0.1),
@@ -41,19 +59,19 @@ end
 
     symbolics = build_symbolics(config)
 
-    # Check the structure 
-    @test all(k -> k in (:states, :parameters, :input), keys(symbolics ))
-    
-    # Check that it returns all symbolics
-    @test all(v -> v isa ParameterSpec, values(symbolics.parameters))
-    @test all(v -> v.symbol isa Symbol, values(symbolics.parameters))
-    @test all(v -> v isa Num, values(symbolics.states))
-    @test symbolics[:input] isa Num
-    @test occursin("ifelse", string(symbolics[:input]))
 
+    for pname in ["k1", "k2", "k3", "k4"]
+        param = Symbol(pname)
+        @test isequal(symbolics.parameters[param].symbol, Symbolics.unwrap(first(@parameters $param)))
+    end
+
+    for (s_sym, var_obj) in symbolics.states
+        @test typeof(var_obj) <: SymbolicUtils.BasicSymbolic
+    end
 
 end
 
+ 
 @testset "Build Equations" begin
     config = Dict(  
         "parameters" => Dict(
@@ -70,11 +88,10 @@ end
     )
 
     syms = build_symbolics(config)
-    eqs = build_equations(config, syms.states, syms.parameters, syms.input)
+    eqs = build_equations(config, syms)
     
-    # Should return a vector of equations 
-    @test eqs isa Vector
-    @test all(x -> x isa Equation, eqs)
-
+    @test all(e -> e isa ModelingToolkit.Equation, eqs)
+    
+    
 end
 
