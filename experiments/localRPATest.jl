@@ -34,7 +34,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 
 
 RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
-println(RPA_model)
+
 @mtkcompile sys = System(RPA_model.equations, t)
 
 
