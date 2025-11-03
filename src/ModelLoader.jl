@@ -156,6 +156,7 @@ end
 # Equation Construction
 # -------------------------------------------------------------------------
 function expr_to_symbolic(expr, symbolics)
+
     if expr isa Expr
         # Recursively process each argument of the expression
         return Expr(expr.head, map(arg -> expr_to_symbolic(arg, symbolics), expr.args)...)
@@ -185,8 +186,8 @@ function build_equations(config::Dict, symbolics)
 
     for (state_str, eq_str) in config["equations"]
         state_sym = Symbol(state_str)
-        parsed_expr = Meta.parse(eq_str)                        # parse string to Expr
-        symbolic_expr = expr_to_symbolic(parsed_expr, symbolics) # convert symbols directly
+        parsed_expr = Meta.parse(eq_str) # parse string
+        symbolic_expr = expr_to_symbolic(parsed_expr, symbolics)
         push!(eqs, D(symbolics.states[state_sym]) ~ symbolic_expr)
     end
 
@@ -225,16 +226,16 @@ from a YAML file.
 
 """
 
-#= function load_model_from_yaml(filename::String)
+function load_model_from_yaml(filename::String)
 
     config = load_YAML(filename)
     validate_YAML(config)
 
     info = get_model_info(config)
     syms = build_symbolics(config)
-  #  eqs = build_equations(config, syms.states, syms.parameters, syms.input)
+    eqs = build_equations(config, syms)
 
-   # return #ModelDefinition(info.model_name,
+    return ModelDefinition(info.model_name,
                            info.model_description,
                            info.model_type,
                            eqs,
@@ -244,4 +245,4 @@ from a YAML file.
 
 
 
-end =#
+end 
