@@ -6,11 +6,13 @@ authors = ["Michal Kobiela <michal@walls.com.pl> and contributors"]
 [deps]
 IOCapture = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
 IOCapture = "1.0.0"
 ModelingToolkit = "10.26.1"
+Symbolics = "6.57.0"
 YAML = "0.4.14"
 julia = "1.11"
 

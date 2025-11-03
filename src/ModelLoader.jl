@@ -2,7 +2,7 @@ using YAML
 using ModelingToolkit
 
 const IV = ModelingToolkit.t_nounits
-const D = ModelingToolkit.D_nounits
+
 
 """ 
 The aim of this module is to be responsible for reading in a YAML and creating the correct
@@ -148,6 +148,7 @@ function build_symbolics(config::Dict)
         error("❌ Unsupported input signal type: $(config["type"])")
     end
 
+
     return (states=state_map, parameters=param_specs, input=input)
 
 end
@@ -155,40 +156,42 @@ end
 # -------------------------------------------------------------------------
 # Equation Construction
 # -------------------------------------------------------------------------
-function expr_to_symbolic(expr, symbolics)
-
-    if expr isa Expr
-        # Recursively process each argument of the expression
-        return Expr(expr.head, map(arg -> expr_to_symbolic(arg, symbolics), expr.args)...)
-    elseif expr isa Symbol
-        # Replace with state variable if it's a state
-        if haskey(symbolics.states, expr)
-            return symbolics.states[expr]
-        # Replace with parameter if it's a parameter
-        elseif haskey(symbolics.parameters, expr)
-            return symbolics.parameters[expr].symbol
-        # Replace input variable if it's named :input
-        elseif expr == :input
-            return symbolics.input
-        else
-            # Keep as-is if unknown (numbers, functions like sin)
-            return expr
-        end
-    else
-        # Numbers and literals are returned as-is
-        return expr
+function expr_to_symbolic(expr_str::String, symbolics)
+    # Build an environment mapping symbols -> symbolic variables
+    env = Dict{Symbol, Any}()
+    
+    for (k, v) in symbolics.states
+        env[k] = v
     end
+
+    for (k, v) in symbolics.parameters
+        env[k] = v.symbol
+    end
+
+    if symbolics.input !== nothing
+        env[:input] = symbolics.input
+    end
+
+    parsed = Meta.parse(expr_str)
+
+    # Evaluate it symbolically
+    return Base.invokelatest(eval, Expr(:block, [:(const $(k) = $(v)) for (k, v) in env]..., parsed))
+end
+
+function expr_to_symbolic(expr::Expr, symbolics)
+    # convert Expr to String and reuse the string method
+    return expr_to_symbolic(string(expr), symbolics)
 end
 
 function build_equations(config::Dict, symbolics)
 
-        eqs = Equation[]
+    eqs = Equation[]
 
     for (state_str, eq_str) in config["equations"]
         state_sym = Symbol(state_str)
         parsed_expr = Meta.parse(eq_str) # parse string
         symbolic_expr = expr_to_symbolic(parsed_expr, symbolics)
-        push!(eqs, D(symbolics.states[state_sym]) ~ symbolic_expr)
+        push!(eqs, ModelingToolkit.D(symbolics.states[state_sym]) ~ symbolic_expr)
     end
 
     return eqs

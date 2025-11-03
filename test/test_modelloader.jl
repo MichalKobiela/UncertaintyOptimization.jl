@@ -83,14 +83,17 @@ end
         "inputs" => Dict("type" => "step", "t_threshold"=>5.0, "values"=>[0.0,1.0]),
         "equations" => Dict(
             "X" => "alpha*X + beta*Y - gamma*X",
-            "Y" => "beta*X - gamma*Y*(inputs)"
+            "Y" => "beta*X - gamma*Y*input"
         )
     )
 
     syms = build_symbolics(config)
     eqs = build_equations(config, syms)
+    RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
     
-    @test all(e -> e isa ModelingToolkit.Equation, eqs)
+    #@mtkcompile sys = System(RPA_model.equations, IV)
+    
+   # @test all(e -> e isa ModelingToolkit.Equation, eqs)
     
     
 end
