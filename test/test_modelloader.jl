@@ -89,11 +89,8 @@ end
 
     syms = build_symbolics(config)
     eqs = build_equations(config, syms)
-    RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
     
-    #@mtkcompile sys = System(RPA_model.equations, IV)
-    
-   # @test all(e -> e isa ModelingToolkit.Equation, eqs)
+    @test all(e -> e isa ModelingToolkit.Equation, eqs)
     
     
 end
