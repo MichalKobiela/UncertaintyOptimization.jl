@@ -2,6 +2,11 @@ using Revise
 using UncertaintyOptimization
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
+using OrdinaryDiffEq
+using CSV, Tables
+using Random
+Random.seed!(0);
+using SciMLBase: VectorOfArray
 
 """
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPA/Inference/mcmc.jl
@@ -30,12 +35,46 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 
 """
 
-# --- Simulate data -----#
-
 
 RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 
+# Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
 
+# --- Initial conditions ---
+init_cond = [1.0, 1.0]
+
+# --- Ground-truth parameters ---
+ground_truth = Dict(
+    :beta_RA => 0.1,
+    :beta_AB => 0.001,
+    :beta_BA => 0.01,
+    :beta_BB => 0.001
+)
+
+# --- Create mapping of unknowns to initial conditions ---
+u_map = Dict(unknowns(sys) .=> init_cond)
+
+# --- Merge with all known parameters ---
+p_all = Dict(p.symbol => p.value for p in values(RPA_model.parameters) if p.value !== nothing)
+p_map = merge(u_map, p_all, ground_truth)
+
+# --- Time span ---
+tspan = (0.0, 100.0)
+
+# --- Create the ODEProblem ---
+rpa_prob = ODEProblem(sys, p_map, tspan)
+
+# --- Solve ---
+sol = solve(rpa_prob, Euler(), dt = 0.01)
+
+# --- Save solution to CSV ---
+CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
 
 
+# --- Make some noisy operations ---
+t_obs = collect(range(1, stop = 90, length = 30))
+randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
+data = convert(Array, randomized)
+
+CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), writeheader=false)
