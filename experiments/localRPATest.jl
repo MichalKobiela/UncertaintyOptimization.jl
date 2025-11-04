@@ -4,9 +4,13 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
 using CSV, Tables
-using Random
-Random.seed!(0);
+using Turing
 using SciMLBase: VectorOfArray
+using SymbolicIndexingInterface
+using Random
+using PreallocationTools
+
+Random.seed!(0);
 
 """
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPA/Inference/mcmc.jl
@@ -72,9 +76,48 @@ sol = solve(rpa_prob, Euler(), dt = 0.01)
 CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
 
 
-# --- Make some noisy operations ---
+# --- Make some noisy observations and save---
 t_obs = collect(range(1, stop = 90, length = 30))
 randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
 data = convert(Array, randomized)
 
 CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), writeheader=false)
+
+uncertain_syms = [
+    sys.beta_RA,
+    sys.beta_BA,
+    sys.beta_AB,
+    sys.beta_BB
+]
+
+# Create a lazy cache that remakes only buffers, not the entire problem
+lbc_func = (p) -> remake_buffer(sys, rpa_prob.p, Dict(zip(uncertain_syms, p)))
+# Create the parameter setter
+setter_p! = setp(sys, uncertain_syms)
+
+@model function fit(data, prob, lbc_func, setter_p!)
+
+    σ ~ InverseGamma(2, 3)
+    beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+
+    # Combine parameters
+    p_vec = [beta_RA, beta_BA, beta_AB, beta_BB]
+
+    # Create fast buffer for these parameter values
+    new_p = lbc_func(p_vec)
+    setter_p!(new_p, p_vec)
+    prob_tmp = remake(prob; p=new_p)
+
+    predicted = solve(prob_tmp, Euler(); dt=0.01, saveat=1.0, save_idxs=1)
+ 
+    data ~ MvNormal(predicted.u, σ^2 * I)
+
+    return nothing
+end
+
+model2 = fit(data, rpa_prob, lbc_func, setter_p!)
+
+@time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=false)
