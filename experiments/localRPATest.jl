@@ -9,6 +9,8 @@ using SciMLBase: VectorOfArray
 using SymbolicIndexingInterface
 using Random
 using PreallocationTools
+using Serialization
+using CSV, Tables
 
 Random.seed!(0);
 
@@ -70,7 +72,7 @@ tspan = (0.0, 100.0)
 rpa_prob = ODEProblem(sys, p_map, tspan)
 
 # --- Solve ---
-sol = solve(rpa_prob, Euler(), dt = 0.01)
+sol = solve(rpa_prob, Rosenbrock23(), dt = 0.01)
 
 # --- Save solution to CSV ---
 CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
@@ -85,8 +87,8 @@ CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), wri
 # --- Create an uncertain dictionary - could take this from the Model Definition later
 uncertain_syms = [
     sys.beta_RA,
-    sys.beta_BA,
     sys.beta_AB,
+    sys.beta_BA,
     sys.beta_BB
 ]
 
@@ -99,12 +101,12 @@ setter_p! = setp(sys, uncertain_syms)
 
     σ ~ InverseGamma(2, 3)
     beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-    beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
     beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
     beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
 
     # Combine parameters
-    p_vec = [beta_RA, beta_BA, beta_AB, beta_BB]
+    p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
 
     # Create fast buffer for these parameter values
     new_p = lbc_func(p_vec)
@@ -121,3 +123,21 @@ end
 model2 = fit(data, rpa_prob, lbc_func, setter_p!)
 
 @time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=false)
+
+
+posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 1000; replace=false)
+samples = Array(posterior_samples)
+
+f = open(".//experiments//RPA_data//posterior_chains.jls", "w")
+serialize(f, chain)
+close(f)
+
+f = open(".//experiments//RPA_data//posterior_chains.jls", "r")
+chain = deserialize(f)
+close(f)
+
+f = open(".//experiments//RPA_data//posterior_samples.jls", "w")
+serialize(f, samples)
+close(f)
+
+CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
