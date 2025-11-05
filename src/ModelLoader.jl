@@ -16,6 +16,7 @@ The aim of this module is to be responsible for reading in a YAML and creating t
 # Struct Definitions
 # -------------------------------------------------------------------------
 
+# Currently immutable but we can make them mutable if required later
 struct ParameterSpec
     name::String # paramater name
     symbol::Any # parameter symbolic
@@ -157,7 +158,7 @@ end
 # Equation Construction
 # -------------------------------------------------------------------------
 function expr_to_symbolic(expr_str::String, symbolics)
-    # Build an environment mapping symbols -> symbolic variables
+    # Build an sandbox mapping symbols -> symbolic variables
     env = Dict{Symbol, Any}()
     
     for (k, v) in symbolics.states
@@ -174,7 +175,7 @@ function expr_to_symbolic(expr_str::String, symbolics)
 
     parsed = Meta.parse(expr_str)
 
-    # Evaluate it symbolically
+    # Evaluate it symbolically - might need to watch out here
     return Base.invokelatest(eval, Expr(:block, [:(const $(k) = $(v)) for (k, v) in env]..., parsed))
 end
 

@@ -80,9 +80,9 @@ CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), wri
 t_obs = collect(range(1, stop = 90, length = 30))
 randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
 data = convert(Array, randomized)
-
 CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), writeheader=false)
 
+# --- Create an uncertain dictionary - could take this from the Model Definition later
 uncertain_syms = [
     sys.beta_RA,
     sys.beta_BA,
@@ -111,9 +111,9 @@ setter_p! = setp(sys, uncertain_syms)
     setter_p!(new_p, p_vec)
     prob_tmp = remake(prob; p=new_p)
 
-    predicted = solve(prob_tmp, Euler(); dt=0.01, saveat=1.0, save_idxs=1)
- 
-    data ~ MvNormal(predicted.u, σ^2 * I)
+    # Change to array because we are working with the ODESystem
+    predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
+    data ~ MvNormal(predicted, σ^2 * I(length(data)))
 
     return nothing
 end
