@@ -30,10 +30,6 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
     
     In the subsequent script then randomly selects 1,000 samples from the posterior and saves to posterior_samples.csv.
     
-    The main idea is to create some simulation of noisy experimental data and see if the inference method can correctly estimate the
-    true parameter values. Because each parameter is a posterior distrbution not just a single estimate the method also quantifies 
-    uncertainty in the inferred parameters.
-    
     The posterior samples can then be used later for design.
 
     The difference in this testing script is the use of the ModelLoader module. The aim is to see if a model defined in this way can
