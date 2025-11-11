@@ -1,0 +1,111 @@
+experiment:
+  name: "RPA"
+  description: "A two gene robust perfect adaptation circuit to test that things work"
+
+model:
+    type: "ODE" # Can be an "SDE" or "ReactionSystem"
+    states: ["A", "B"]
+
+equations:
+    A: "alpha_1*(1/(1+(K_TF/(1+(input/K_IR)))^n_RA) + beta_RA)*(1/((K_BA/B)^n_BA + 1) + beta_BA) - gamma_A*A"
+    B: "alpha_2*(1/(1+(A/K_AB)^n_AB) + beta_AB)*(1/((K_BB/B)^n_BB + 1) + beta_BB) - gamma_B*B"
+
+simulation:
+    tspan: [0.0, 100.0]
+    solver: "Rosenbrock23"
+
+parameters:
+  alpha_1:
+    value: 100
+    role: design
+    bounds: [10.0, 200.0]
+
+  alpha_2:
+    value: 100
+    role: design
+    bounds: [10.0, 200.0]
+
+  beta_RA:
+    value: 0.0
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1.0
+
+  beta_AB:
+    value: 0.0
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1.0
+
+  beta_BA:
+    value: 0.0
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1.0
+
+  beta_BB:
+    value: 0.0
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1.0
+
+  gamma_A:
+    value: 1.0
+    role: fixed
+
+  gamma_B:
+    value: 1.0
+    role: fixed
+
+  n_RA:
+    value: 1.0
+    role: fixed
+
+  n_BA:
+    value: 1.0
+    role: fixed
+
+  n_AB:
+    value: 1.0
+    role: fixed
+
+  n_BB:
+    value: 1.0
+    role: fixed
+
+  K_IR:
+    value: 1.0
+    role: fixed
+
+  K_TF:
+    value: 1.0
+    role: fixed
+
+  K_BA:
+    value: 1.0
+    role: design
+    bounds: [0.1, 10.0]
+
+  K_AB:
+    value: 1.0
+    role: design
+    bounds: [0.1, 10.0]
+
+  K_BB:
+    value: 1.0
+    role: design
+    bounds: [0.1, 10.0]
+
+inputs:
+    type: "step"
+    t_threshold: 50
+    values: [1,10]
+   
