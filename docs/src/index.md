@@ -6,9 +6,12 @@ CurrentModule = UncertaintyOptimization
 
 Documentation for [UncertaintyOptimization](https://github.com/MichalKobiela/UncertaintyOptimization.jl).
 
-```@index
+Package for risk adverse optimisation under uncertainty.
+
+## Install
+
+```julia-repl
+pkg> add https://github.com/MichalKobiela/UncertaintyOptimization.jl
 ```
 
-```@autodocs
-Modules = [UncertaintyOptimization]
-```
+
