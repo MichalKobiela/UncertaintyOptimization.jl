@@ -75,11 +75,11 @@ function simulate!(model::Model,
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
     p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
     # Merge them all together - here user defined params will override existing
-    all_params = merge(u0, p_map)
+    all_params = merge(u0, p_map, parameters)
 
     # Currently supports ODE but can add a contiditional here based on what the
     # user specifies
-    model.prob = ODEProblem(model.sys, all_params,tspan)
+    model.prob = ODEProblem(model.sys, all_params, tspan)
 
     # Solve the Problem
     # If saveat is empty, use dt as the save interval
