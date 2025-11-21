@@ -2,7 +2,6 @@ using Test
 using YAML
 using ModelingToolkit
 using IOCapture
-include("../src/ModelLoader.jl")
 
 
 
@@ -10,7 +9,7 @@ include("../src/ModelLoader.jl")
     # Test for missing file and an error being gracefully handled
     missing_file = "i-dont-exists-file.yml"
     output = IOCapture.capture() do 
-        config = load_YAML(missing_file)
+        config = UncertaintyOptimization.load_YAML(missing_file)
         @test config == nothing
     end
     println(output)
@@ -19,7 +18,7 @@ include("../src/ModelLoader.jl")
     # Test that it loads an a real file returning a Dict
     filename = joinpath(@__DIR__, "test-data", "test_RPA.yml")
     if isfile(filename)
-        config = load_YAML(filename)
+        config = UncertaintyOptimization.load_YAML(filename)
         @test config isa Dict
     else
         @info "Skipping test: $filename not found (likely CI environment)"
@@ -29,12 +28,12 @@ end
 
 @testset "Symbolics conversion" begin
 
-    param = create_param("k")
+    param = UncertaintyOptimization.create_param("k")
     @parameters k
 
     @test isequal(param,k)
 
-    var = create_param("A")
+    var = UncertaintyOptimization.create_param("A")
     @variables A
 
     @test isequal(var,A)
@@ -61,7 +60,7 @@ end
         )
     )
 
-    symbolics = build_symbolics(config)
+    symbolics = UncertaintyOptimization.build_symbolics(config)
 
 
     for pname in ["k1", "k2", "k3", "k4"]
@@ -91,8 +90,8 @@ end
         )
     )
 
-    syms = build_symbolics(config)
-    eqs = build_equations(config, syms)
+    syms = UncertaintyOptimization.build_symbolics(config)
+    eqs = UncertaintyOptimization.build_equations(config, syms)
     
     @test all(e -> e isa ModelingToolkit.Equation, eqs)
     
