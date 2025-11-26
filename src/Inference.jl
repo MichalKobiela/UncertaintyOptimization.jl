@@ -61,10 +61,6 @@ end
 
 Get the underlying Model object.
 
-# Why this is useful:
-You can still use all Model methods (simulate!, plot_state, etc.)
-while working with InferenceProblem.
-
 # Example
 ```julia
 model = get_model(inf_prob)
@@ -74,6 +70,59 @@ plot_all_states(model)
 """
 
 function get_model(inf_prob::InferenceProblem)
-    # Simply return the model - allows access to all Model methods
+    # Just so we can still use all Model methods (simulate!, plot_state, etc.) while working with InferenceProblem.
     return inf_prob.model
+end
+
+# =========================================================================
+# Data Methods
+# =========================================================================
+
+"""
+    set_data!(inf_prob::InferenceProblem, 
+              data::Vector{Float64}, 
+              t_obs::Vector{Float64})
+
+Set the observation data for inference.
+
+Stores the observed data and corresponding time points in the InferenceProblem.
+
+# Arguments
+- `inf_prob`: The InferenceProblem to update
+- `data`: Vector of observed values
+- `t_obs`: Vector of time points when observations were made
+
+# Validation:
+- Checks that data and time vectors have the same length
+- Checks that time points are within reasonable range
+
+# Example
+```julia
+# Generate synthetic observations
+t_obs = [0.0, 1.0, 2.0, 5.0, 10.0]
+data = [1.2, 1.5, 1.8, 2.1, 2.3]
+
+set_data!(inf_prob, data, t_obs)
+```
+"""
+
+function set_data!(inf_prob::InferenceProblem,
+                    data::Vector{Float64},
+                    t_obs::Vector{Float64})
+
+    # Do some checks first
+    if length(data) != length(t_obs)
+        error("❌ Data and time vectors must have the same length. " *
+              "Got data: $(length(data)), times: $(length(t_obs))")
+    end
+    if length(data) == 0
+        error("❌ Cannot set empty data. Need at least one observation.")
+    end
+    if any(!isfinite, data)
+        error("❌ Data contains NaN or Inf values")
+    end
+
+    inf_prob.data = data
+    inf_prob.t_obs = t_obs
+    
 end
