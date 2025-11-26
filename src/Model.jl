@@ -21,13 +21,43 @@ mutable struct Model
     prob::Union{Nothing, ODEProblem} #ODE supported first
     sol::Union{Nothing, Any} # solution of the LAST simulation
 
+    # fields for inference procedure
+    param_setter:: Union{Nothing, Any}
+    buffer_func::Union{Nohing, Function}
+    uncertain_params::Union{Nothing, Vector}
+
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing)
+        new(model_def, sys, nothing, nothing, nothing, nothing, nothing)
 
     end
 end
+# -------------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------------
+
+"""
+    get_uncertain_parameters(model::Model) -> Vector{Symbol}
+
+Get the parameter names marked as :uncertain in the model definition
+
+"""
+function get_uncertain_parameters(model::Model)
+    uncertain = Symbol[]
+    for (name, spec) in model.model_def.parameters
+        if spec.role == :uncertain
+            push!(uncertain, name)
+        end
+    end
+    return uncertain
+end
+
+# -------------------------------------------------------------------------
+# Methods
+# -------------------------------------------------------------------------
+
+
 
 # -------------------------------------------------------------------------
 # Simulators
@@ -93,3 +123,4 @@ function simulate!(model::Model,
 
     return model.sol
 end
+

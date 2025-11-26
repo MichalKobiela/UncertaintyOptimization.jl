@@ -6,7 +6,7 @@ using SymbolicIndexingInterface
 """
     InferenceProblem
 
-Wraps a Model and adds inference-specific functionality for Bayesian parameter estimation.
+Wraps a Model and adds inference-specific functionality.
 
 # Fields
 - `model::Model`: The Model object to perform inference on
