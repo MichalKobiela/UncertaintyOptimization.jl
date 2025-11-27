@@ -5,29 +5,63 @@ include("helpers/mock_rpa.jl")
 using .MockRPA
 
 @testset "Test Model simulations" begin
+
+    @testset "Test one off simulation" begin
     
-    model_def = MockRPA.mock_rpa_model()
+        model_def = MockRPA.mock_rpa_model()
 
-    @mtkcompile sys = System(model_def.equations, t)
+        @mtkcompile sys = System(model_def.equations, t)
 
-    model = UncertaintyOptimization.Model(model_def, sys)
+        model = UncertaintyOptimization.Model(model_def, sys)
 
-    u0 = [1.0, 1.0]
+        u0 = [1.0, 1.0]
 
-    params = Dict(
-         :beta_RA => 0.1,
-         :beta_AB => 0.001,
-         :beta_BA => 0.01,
-         :beta_BB => 0.001
-     )
+        params = Dict(
+            :beta_RA => 0.1,
+            :beta_AB => 0.001,
+            :beta_BA => 0.01,
+            :beta_BB => 0.001
+        )
+            
+        tspan = (0.0, 100.0) 
+            
+        # Run simulation
+        sol = simulate!(model, u0, params, tspan)
+            
+        # Check that solution exists
+        @test sol !== nothing
+
+    end
+
+    @testset "Test setup simulation" begin
+    
+        model_def = MockRPA.mock_rpa_model()
+
+        @mtkcompile sys = System(model_def.equations, t)
+
+        model = UncertaintyOptimization.Model(model_def, sys)
+
+        t_obs = collect(range(0.0, 100.0, length=10))
+        params = Dict(
+            :beta_RA => 0.1,
+            :beta_AB => 0.001,
+            :beta_BA => 0.01,
+            :beta_BB => 0.001
+        )
         
-     tspan = (0.0, 100.0) 
+        UncertaintyOptimization.setup_simulation!(
+            model, t_obs, 1, [1.0, 1.0], params, (0.0, 100.0)
+        )
         
-     # Run simulation
-     sol = simulate!(model, u0, params, tspan)
+        # Call evaluate with uncertain params
+        # Order: beta_RA, beta_AB, beta_BA, beta_BB
+        predicted = UncertaintyOptimization.run_simulation(model, [0.1, 0.1, 0.1, 0.1])
         
-     # Check that solution exists
-     @test sol !== nothing
+        @test length(predicted) == length(t_obs)
+        @test all(isfinite, predicted)
+        
+
+    end
     
 end
 

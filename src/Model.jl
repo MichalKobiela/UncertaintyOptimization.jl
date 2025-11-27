@@ -64,10 +64,10 @@ function run_simulation(model::Model, parameters::Vector{Float64})
         error("Model not prepared for simulation. Call setup_simulation!")
     end
 
-    ctx = model.eval_context
+    ctx = model.simulation_context
 
     # Reuse the already created problem and update
-    new_p = model.buffer_func(paramaters)
+    new_p = model.buffer_func(parameters)
     model.param_setter(new_p, parameters)
     prob_new = remake(model.prob; p=new_p)
 
@@ -154,50 +154,40 @@ Prepares the model for simulation, created onced for many evaluations.
                       obs_state_idx::Int,
                       initial_conditions::Vector{Float64},
                       tspan::Tuple{Float64, Float64},
-                      fixed_params::Dict=Dict(),
                       solver=Euler(),
                       dt::Float64=0.01)
 
 """
 
-function setup_simulation!(model::Model, 
-                   initial_conditions::Vector{Float64},
-                   parameters::Dict,
-                   tspan::Tuple{Float64, Float64};
-                   solver=Tsit5(),
-                   dt::Float64=0.01)
-
-    # If we have states [A ,B] and initial conditions [1.0, 1.0]
-    # this creates Dict(A=> 1.0, and B=> 1.0)
+function setup_simulation!(model::Model,
+                          t_obs::Vector{Float64},
+                          obs_state_idx::Int,
+                          initial_conditions::Vector{Float64},
+                          parameters::Dict,
+                          tspan::Tuple{Float64, Float64};
+                          solver=Euler(),
+                          dt::Float64=0.01)
+    
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
-
     p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
     
-    # Merge them all together - here user defined params will override existing
     all_params = merge(u0, p_map, parameters)
     model.prob = ODEProblem(model.sys, all_params, tspan)
-
-    # Get uncertain params for inference
+    
     uncertain_names = get_uncertain_parameters(model)
-    model.uncertain_syms = [getproperty(model.sys, name) for name in uncertain_names]
-
-    model.param_setter = setp(model.sys, model.uncertain_syms)
+    model.uncertain_params = [getproperty(model.sys, name) for name in uncertain_names]
+    model.param_setter = setp(model.sys, model.uncertain_params)
     model.buffer_func = (p) -> remake_buffer(
-        model.sys, model.prob.p, Dict(zip(model.uncertain_syms, p))
+        model.sys, model.prob.p, Dict(zip(model.uncertain_params, p))
     )
-
-    model.eval_context = (
+    
+    model.simulation_context = (
         t_obs = t_obs,
         obs_state_idx = obs_state_idx,
         solver = solver,
         dt = dt
     )
-
-
+    
     println("✅ Model ready for simulation")
-    println("   Uncertain parameters: $uncertain_names")
-    println("   Observation times: $(length(t_obs)) points")
-
     return nothing
-
 end
