@@ -1,6 +1,6 @@
 using ModelingToolkit
 using OrdinaryDiffEq
-
+using SymbolicIndexingInterface
 """
 Model
 
@@ -58,7 +58,7 @@ end
 # Inference hook
 # -------------------------------------------------------------------------
 
-function run_simulation(model::Model, parameters::Vector{Float64})
+function predict(model::Model, parameters::Vector{Float64})
 
     if model.simulation_context === nothing
         error("Model not prepared for simulation. Call setup_simulation!")

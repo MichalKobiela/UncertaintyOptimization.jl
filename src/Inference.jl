@@ -1,5 +1,4 @@
 
-
 """
     Adaptor for the Inference process.
 
@@ -10,6 +9,11 @@ trivial.
 
 Only need to call run_inference(model::Model, spec::AbstractInference)
 
+Common functions for all inference procedures go here:
+
+1. Set up a simulation
+2. Solve for uncertain params
+
 """
 # Fallback function
 function run_inference(model::Model, spec::InferenceSpec)
@@ -17,16 +21,13 @@ function run_inference(model::Model, spec::InferenceSpec)
 end
 
 function setup_model_for_inference(model::Model, spec::InferenceSpec)
-    # Setup model evaluation
-    setup_simulation!(model,
-                     t_obs=spec.t_obs,
-                     obs_state_idx=spec.obs_state_idx,
-                     initial_conditions=spec.initial_conditions,
-                     parameters=model.parameters,
-                     tspan=spec.tspan,
-                     fixed_params=spec.fixed_params,
-                     solver=spec.solver,
-                     dt=spec.dt)
+    # Setup model simulation
+    setup_simulation!(model,t_obs=spec.t_obs,obs_state_idx=spec.obs_state_idx,
+                          initial_conditions=spec.initial_conditions,
+                          parameters=spec.fixed_params,
+                          tspan=spec.tspan,
+                          solver=spec.solver,
+                          dt=spec.dt)
     
     return nothing
 end
