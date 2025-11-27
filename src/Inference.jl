@@ -14,7 +14,7 @@ Wraps a Model and adds inference-specific functionality.
 - `t_obs::Union{Nothing, Vector{Float64}}`: Time points of observations
 - `obs_state_idx::Int`: Which state variable is observed (default: 1)
 - `noise_prior::Distribution`: Prior for observation noise
-- `chain::Union{Nothing, Any}`: MCMC chain results (stored after sampling)
+- `chain::Union{Nothing, Any}`: chain results (stored after sampling)
 
 # Example
 ```julia

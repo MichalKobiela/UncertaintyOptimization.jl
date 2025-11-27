@@ -23,13 +23,14 @@ mutable struct Model
 
     # fields for inference procedure
     param_setter:: Union{Nothing, Any}
-    buffer_func::Union{Nohing, Function}
+    buffer_func::Union{Nothing, Function}
     uncertain_params::Union{Nothing, Vector}
+    simulation_context::Union{Nothing, NamedTuple}
 
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing, nothing, nothing, nothing)
+        new(model_def, sys, nothing, nothing, nothing, nothing, nothing, nothing)
 
     end
 end
@@ -54,10 +55,31 @@ function get_uncertain_parameters(model::Model)
 end
 
 # -------------------------------------------------------------------------
-# Methods
+# Inference hook
 # -------------------------------------------------------------------------
 
+function run_simulation(model::Model, parameters::Vector{Float64})
 
+    if model.simulation_context === nothing
+        error("Model not prepared for simulation. Call setup_simulation!")
+    end
+
+    ctx = model.eval_context
+
+    # Reuse the already created problem and update
+    new_p = model.buffer_func(paramaters)
+    model.param_setter(new_p, parameters)
+    prob_new = remake(model.prob; p=new_p)
+
+    sol = solve(prob_new, ctx.solver; 
+                dt=ctx.dt, 
+                saveat=ctx.t_obs, 
+                save_idxs=ctx.obs_state_idx)
+    
+    return Array(sol)
+
+
+end
 
 # -------------------------------------------------------------------------
 # Simulators
@@ -124,3 +146,58 @@ function simulate!(model::Model,
     return model.sol
 end
 
+"""
+Prepares the model for simulation, created onced for many evaluations.
+
+    setup_evaluation!(model::Model;
+                      t_obs::Vector{Float64},
+                      obs_state_idx::Int,
+                      initial_conditions::Vector{Float64},
+                      tspan::Tuple{Float64, Float64},
+                      fixed_params::Dict=Dict(),
+                      solver=Euler(),
+                      dt::Float64=0.01)
+
+"""
+
+function setup_simulation!(model::Model, 
+                   initial_conditions::Vector{Float64},
+                   parameters::Dict,
+                   tspan::Tuple{Float64, Float64};
+                   solver=Tsit5(),
+                   dt::Float64=0.01)
+
+    # If we have states [A ,B] and initial conditions [1.0, 1.0]
+    # this creates Dict(A=> 1.0, and B=> 1.0)
+    u0 = Dict(unknowns(model.sys) .=> initial_conditions)
+
+    p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
+    
+    # Merge them all together - here user defined params will override existing
+    all_params = merge(u0, p_map, parameters)
+    model.prob = ODEProblem(model.sys, all_params, tspan)
+
+    # Get uncertain params for inference
+    uncertain_names = get_uncertain_parameters(model)
+    model.uncertain_syms = [getproperty(model.sys, name) for name in uncertain_names]
+
+    model.param_setter = setp(model.sys, model.uncertain_syms)
+    model.buffer_func = (p) -> remake_buffer(
+        model.sys, model.prob.p, Dict(zip(model.uncertain_syms, p))
+    )
+
+    model.eval_context = (
+        t_obs = t_obs,
+        obs_state_idx = obs_state_idx,
+        solver = solver,
+        dt = dt
+    )
+
+
+    println("✅ Model ready for simulation")
+    println("   Uncertain parameters: $uncertain_names")
+    println("   Observation times: $(length(t_obs)) points")
+
+    return nothing
+
+end
