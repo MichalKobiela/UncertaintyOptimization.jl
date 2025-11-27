@@ -47,7 +47,7 @@ RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
-init_cond = [1.0, 1.0]  # Initial conditions for [R, A]
+init_cond = [1.0, 1.0]  # Initial conditions for [A, B]
         
 # Parameters to simulate with (ground truth values)
 params = Dict(

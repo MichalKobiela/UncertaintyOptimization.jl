@@ -1,6 +1,6 @@
 using ModelingToolkit
 using OrdinaryDiffEq
-
+using SymbolicIndexingInterface
 """
 Model
 
@@ -21,12 +21,64 @@ mutable struct Model
     prob::Union{Nothing, ODEProblem} #ODE supported first
     sol::Union{Nothing, Any} # solution of the LAST simulation
 
+    # fields for inference procedure
+    param_setter:: Union{Nothing, Any}
+    buffer_func::Union{Nothing, Function}
+    uncertain_params::Union{Nothing, Vector}
+    simulation_context::Union{Nothing, NamedTuple}
+
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing)
+        new(model_def, sys, nothing, nothing, nothing, nothing, nothing, nothing)
 
     end
+end
+# -------------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------------
+
+"""
+    get_uncertain_parameters(model::Model) -> Vector{Symbol}
+
+Get the parameter names marked as :uncertain in the model definition
+
+"""
+function get_uncertain_parameters(model::Model)
+    uncertain = Symbol[]
+    for (name, spec) in model.model_def.parameters
+        if spec.role == :uncertain
+            push!(uncertain, name)
+        end
+    end
+    return uncertain
+end
+
+# -------------------------------------------------------------------------
+# Inference hook
+# -------------------------------------------------------------------------
+
+function predict(model::Model, parameters::Vector{Float64})
+
+    if model.simulation_context === nothing
+        error("Model not prepared for simulation. Call setup_simulation!")
+    end
+
+    ctx = model.simulation_context
+
+    # Reuse the already created problem and update
+    new_p = model.buffer_func(parameters)
+    model.param_setter(new_p, parameters)
+    prob_new = remake(model.prob; p=new_p)
+
+    sol = solve(prob_new, ctx.solver; 
+                dt=ctx.dt, 
+                saveat=ctx.t_obs, 
+                save_idxs=ctx.obs_state_idx)
+    
+    return Array(sol)
+
+
 end
 
 # -------------------------------------------------------------------------
@@ -92,4 +144,50 @@ function simulate!(model::Model,
     end
 
     return model.sol
+end
+
+"""
+Prepares the model for simulation, created onced for many evaluations.
+
+    setup_evaluation!(model::Model;
+                      t_obs::Vector{Float64},
+                      obs_state_idx::Int,
+                      initial_conditions::Vector{Float64},
+                      tspan::Tuple{Float64, Float64},
+                      solver=Euler(),
+                      dt::Float64=0.01)
+
+"""
+
+function setup_simulation!(model::Model,
+                          t_obs::Vector{Float64},
+                          obs_state_idx::Int,
+                          initial_conditions::Vector{Float64},
+                          parameters::Dict,
+                          tspan::Tuple{Float64, Float64};
+                          solver=Euler(),
+                          dt::Float64=0.01)
+    
+    u0 = Dict(unknowns(model.sys) .=> initial_conditions)
+    p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
+    
+    all_params = merge(u0, p_map, parameters)
+    model.prob = ODEProblem(model.sys, all_params, tspan)
+    
+    uncertain_names = get_uncertain_parameters(model)
+    model.uncertain_params = [getproperty(model.sys, name) for name in uncertain_names]
+    model.param_setter = setp(model.sys, model.uncertain_params)
+    model.buffer_func = (p) -> remake_buffer(
+        model.sys, model.prob.p, Dict(zip(model.uncertain_params, p))
+    )
+    
+    model.simulation_context = (
+        t_obs = t_obs,
+        obs_state_idx = obs_state_idx,
+        solver = solver,
+        dt = dt
+    )
+    
+    println("✅ Model ready for simulation")
+    return nothing
 end
