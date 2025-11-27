@@ -34,7 +34,7 @@ Uses all fields from InferenceSpec, plus:
 - `n_samples::Int`: Samples per chain
 - `n_chains::Int`: Number of chains
 - `sampling_method::Any`: Threading method
-- `solver`: ODE solver
+- `solver`: solver
 - `dt::Float64`: Time step
 
  Example
