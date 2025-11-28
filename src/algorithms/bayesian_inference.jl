@@ -83,13 +83,14 @@ function _build_turing_model(model::Model, spec::BayesianSpec)
 
         σ ~ noise_prior
 
-        p_dict = Dict{Symbol, Float64}()
+        uncertain_param = Dict{Symbol, Float64}()
 
         for pname in uncertain_vec
-            p_dict[pname] ~ priors[pname]  
+            uncertain_param[pname] ~ priors[pname]  
         end
 
-        p_vec = [p_dict[n] for n in uncertain_vec]
+        p_vec = [uncertain_param[n] for n in uncertain_vec]
+        
         predicted = evaluate_model(model, p_vec)
 
         data ~ MvNormal(predicted, σ^2 * I(length(predicted)))

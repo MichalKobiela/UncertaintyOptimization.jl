@@ -12,6 +12,7 @@ using PreallocationTools
 using Serialization
 using CSV, Tables
 using Plots
+using DataFrames
 
 Random.seed!(0);
 
@@ -69,16 +70,62 @@ spec = BayesianSpec(
     data = data,
     t_obs = collect(t_obs),
     initial_conditions = [1.0, 1.0],
-    tspan = (0.0, 100.0),
+    tspan = (0.0, 10.0),
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65),
-    n_samples = 1000,
+    n_samples = 5,
     n_chains = 3,
     solver = Euler(),
     dt = 0.01
 )
 
-chain = run_inference(model, spec)
+@time chain = run_inference(model, spec)
+
+
+function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000, rng::AbstractRNG=Random.GLOBAL_RNG)
+    # 1. Get all names in the chain
+    names_in_chain = names(chain)
+
+    # 2. Filter for uncertain parameters
+    uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
+
+    # 3. Sample posterior for those params
+    sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)
+
+    # 4. Convert to array
+    samples_array = Array(sampled_chain)
+
+    # 5. Clean up parameter names
+    clean_names = Symbol.(replace.(string.(uncertain_params), r"uncertain_param\[:(.+)\]" => s"\1"))
+
+    # 6. Return DataFrame
+    return DataFrame(samples_array, Symbol.(clean_names))
+end
+
+
+
+posterior_df = extract_uncertain_posteriors(chain; n_samples=5)  # returns DataFrame
+samples = Array(posterior_df)  # convert to plain array if desired
+
+# --- Save the full chain ---
+f = open(".//experiments//RPA_data//posterior_chains_new.jls", "w")
+serialize(f, chain)
+close(f)
+
+# --- Load the chain back (if needed) ---
+f = open(".//experiments//RPA_data//posterior_chains_new.jls", "r")
+chain = deserialize(f)
+close(f)
+
+# --- Save posterior samples separately ---
+f = open(".//experiments//RPA_data//posterior_samples_new.jls", "w")
+serialize(f, samples)
+close(f)
+
+# CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
+
+#posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 5; replace=false)
+#samples = Array(posterior_samples)
 
 # --- Save solution to CSV ---
 #CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
