@@ -11,6 +11,20 @@ function run_inference(model::Model, spec::BayesianSpec)
 
 
     # 2. Build turing model
+    optim_model = _build_turing_model(model, spec)
+
+    # 3. Run sampling
+    chain = sample(
+        optim_model(),
+        spec.sampler,
+        spec.sampling_method,
+        spec.n_samples,
+        spec.n_chains;
+        progress=true
+    )
+
+    return chain
+    
 
 end
 
@@ -51,27 +65,34 @@ end
     _build_turing_model(model, spec, metadata) -> Turing.Model
 
 # Implementation
-- Uses model.run_simulation() for predictions
+- Uses model.evaluate_model() for predictions
 - Gets priors from metadata
 - Builds likelihood from spec
 """
 
 function _build_turing_model(model::Model, spec::BayesianSpec)
 
+    data = spec.data
+    noise_prior = spec.noise_prior
     uncertain_params = get_uncertain_parameters(model)
     priors = make_priors(model)
+    
+    uncertain_vec = collect(uncertain_params)
 
-    @model function turing_model(spec, model)
+    @model function turing_model()
 
-        σ ~ spec.noise_prior
-        p_vec = Vector{Float64}(undef, length(uncertain_params))
+        σ ~ noise_prior
 
-        for (i, name) in enumerate(uncertain_params)
-            p_vec[i] ~ priors[name]
+        p_dict = Dict{Symbol, Float64}()
+
+        for pname in uncertain_vec
+            p_dict[pname] ~ priors[pname]  
         end
 
+        p_vec = [p_dict[n] for n in uncertain_vec]
         predicted = evaluate_model(model, p_vec)
-        spec.data ~ MvNormal(predicted, σ^2 * I(length(predicted)))
+
+        data ~ MvNormal(predicted, σ^2 * I(length(predicted)))
 
     end
 

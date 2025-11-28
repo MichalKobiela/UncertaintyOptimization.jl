@@ -22,12 +22,16 @@ end
 
 function setup_model_for_inference(model::Model, spec::InferenceSpec)
     # Setup model simulation
-    setup_simulation!(model,t_obs=spec.t_obs,obs_state_idx=spec.obs_state_idx,
-                          initial_conditions=spec.initial_conditions,
-                          parameters=spec.fixed_params,
-                          tspan=spec.tspan,
-                          solver=spec.solver,
-                          dt=spec.dt)
+     setup_simulation!(
+        model,
+        spec.t_obs,                 
+        spec.obs_state_idx,         
+        spec.initial_conditions,    
+        spec.fixed_params,          
+        spec.tspan;                 
+        solver = spec.solver,       
+        dt     = spec.dt            
+    )
     
     return nothing
 end

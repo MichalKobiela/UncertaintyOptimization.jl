@@ -38,7 +38,6 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 
 """
 
-
 RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 
 # Compile the system once
@@ -62,12 +61,31 @@ tspan = (0.0, 100.0)  # Simulate from t=0 to t=100
 # Run simulation
 sol = simulate!(model, init_cond, params, tspan)
 
+t_obs = collect(range(1, stop = 90, length = 30))
+randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
+data = convert(Array, randomized)
+
+spec = BayesianSpec(
+    data = data,
+    t_obs = collect(t_obs),
+    initial_conditions = [1.0, 1.0],
+    tspan = (0.0, 100.0),
+    noise_prior = InverseGamma(2,3),
+    sampler = NUTS(0.65),
+    n_samples = 1000,
+    n_chains = 3,
+    solver = Euler(),
+    dt = 0.01
+)
+
+chain = run_inference(model, spec)
+
 # --- Save solution to CSV ---
-CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
+#CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
 
 # --- Plot the solution ---
-plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
-savefig("./test/test-plots/simulation_plot.png")
+#plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
+#savefig("./test/test-plots/simulation_plot.png")
 
 
 # # --- Make some noisy observations and save---
@@ -81,7 +99,8 @@ savefig("./test/test-plots/simulation_plot.png")
 #     sys.beta_RA,
 #     sys.beta_AB,
 #     sys.beta_BA,
-#     sys.beta_BB
+#     sys.beta_BB]
+
 # ]
 
 # # Create a lazy cache that remakes only buffers, not the entire problem
