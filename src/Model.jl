@@ -58,7 +58,7 @@ end
 # Inference hook
 # -------------------------------------------------------------------------
 
-function predict(model::Model, parameters::Vector{Float64})
+function evaluate_model(model::Model, parameters::Vector{Float64})
 
     if model.simulation_context === nothing
         error("Model not prepared for simulation. Call setup_simulation!")
