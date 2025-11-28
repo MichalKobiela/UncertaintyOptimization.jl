@@ -70,10 +70,10 @@ spec = BayesianSpec(
     data = data,
     t_obs = collect(t_obs),
     initial_conditions = [1.0, 1.0],
-    tspan = (0.0, 10.0),
+    tspan = (0.0, 100.0),
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65),
-    n_samples = 5,
+    n_samples = 1000,
     n_chains = 3,
     solver = Euler(),
     dt = 0.01
@@ -83,28 +83,15 @@ spec = BayesianSpec(
 
 
 function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000, rng::AbstractRNG=Random.GLOBAL_RNG)
-    # 1. Get all names in the chain
     names_in_chain = names(chain)
-
-    # 2. Filter for uncertain parameters
     uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
-
-    # 3. Sample posterior for those params
     sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)
-
-    # 4. Convert to array
     samples_array = Array(sampled_chain)
-
-    # 5. Clean up parameter names
     clean_names = Symbol.(replace.(string.(uncertain_params), r"uncertain_param\[:(.+)\]" => s"\1"))
-
-    # 6. Return DataFrame
     return DataFrame(samples_array, Symbol.(clean_names))
 end
 
-
-
-posterior_df = extract_uncertain_posteriors(chain; n_samples=5)  # returns DataFrame
+posterior_df = extract_uncertain_posteriors(chain; n_samples=1000)  # returns DataFrame
 samples = Array(posterior_df)  # convert to plain array if desired
 
 # --- Save the full chain ---
@@ -122,80 +109,4 @@ f = open(".//experiments//RPA_data//posterior_samples_new.jls", "w")
 serialize(f, samples)
 close(f)
 
-# CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
-
-#posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 5; replace=false)
-#samples = Array(posterior_samples)
-
-# --- Save solution to CSV ---
-#CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
-
-# --- Plot the solution ---
-#plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
-#savefig("./test/test-plots/simulation_plot.png")
-
-
-# # --- Make some noisy observations and save---
-# t_obs = collect(range(1, stop = 90, length = 30))
-# randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
-# data = convert(Array, randomized)
-# CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), writeheader=false)
-
-# # --- Create an uncertain dictionary - could take this from the Model Definition later
-# uncertain_syms = [
-#     sys.beta_RA,
-#     sys.beta_AB,
-#     sys.beta_BA,
-#     sys.beta_BB]
-
-# ]
-
-# # Create a lazy cache that remakes only buffers, not the entire problem
-# lbc_func = (p) -> remake_buffer(sys, rpa_prob.p, Dict(zip(uncertain_syms, p)))
-# # Create the parameter setter
-# setter_p! = setp(sys, uncertain_syms)
-
-# @model function fit(data, prob, lbc_func, setter_p!)
-
-#     σ ~ InverseGamma(2, 3)
-#     beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-
-#     # Combine parameters
-#     p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
-
-#     # Create fast buffer for these parameter values
-#     new_p = lbc_func(p_vec)
-#     setter_p!(new_p, p_vec)
-#     prob_tmp = remake(prob; p=new_p)
-
-#     # Change to array because we are working with the ODESystem
-#     predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
-#     data ~ MvNormal(predicted, σ^2 * I(length(data)))
-
-#     return nothing
-# end
-
-# model2 = fit(data, rpa_prob, lbc_func, setter_p!)
-
-# @time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=false)
-
-
-# posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 1000; replace=false)
-# samples = Array(posterior_samples)
-
-# f = open(".//experiments//RPA_data//posterior_chains.jls", "w")
-# serialize(f, chain)
-# close(f)
-
-# f = open(".//experiments//RPA_data//posterior_chains.jls", "r")
-# chain = deserialize(f)
-# close(f)
-
-# f = open(".//experiments//RPA_data//posterior_samples.jls", "w")
-# serialize(f, samples)
-# close(f)
-
-# CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
+CSV.write(".//experiments//RPA_data//posterior_samples_new.csv",  Tables.table(samples), writeheader=false)

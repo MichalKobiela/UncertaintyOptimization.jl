@@ -37,7 +37,7 @@ function make_prior(prior::Dict)
 
     dist = lowercase(prior["distribution"])
     if dist == "uniform"
-        return Uniform(prior["lower"], prior["upper"])
+        return truncated(Uniform(prior["lower"], prior["upper"]))
     else
         error("Unsupported prior distribution: $(prior["distribution"])")
     end
