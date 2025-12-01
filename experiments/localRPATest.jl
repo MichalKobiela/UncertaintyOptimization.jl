@@ -68,7 +68,7 @@ data = convert(Array, randomized)
 
 spec = BayesianSpec(
     data = data,
-    t_obs = collect(t_obs),
+    t_obs = t_obs,
     initial_conditions = [1.0, 1.0],
     tspan = (0.0, 100.0),
     noise_prior = InverseGamma(2,3),
@@ -82,7 +82,7 @@ spec = BayesianSpec(
 @time chain = run_inference(model, spec)
 
 
-function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000, rng::AbstractRNG=Random.GLOBAL_RNG)
+function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000)
     names_in_chain = names(chain)
     uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
     sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)

@@ -55,7 +55,7 @@ using .MockRPA
         
         # Call evaluate with uncertain params
         # Order: beta_RA, beta_AB, beta_BA, beta_BB
-        predicted = UncertaintyOptimization.predict(model, [0.1, 0.1, 0.1, 0.1])
+        predicted = UncertaintyOptimization.evaluate_model(model, [0.1, 0.1, 0.1, 0.1])
         
         @test length(predicted) == length(t_obs)
         @test all(isfinite, predicted)
