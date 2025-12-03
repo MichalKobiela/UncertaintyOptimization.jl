@@ -27,10 +27,10 @@ function setup_model_for_inference(model::Model, spec::InferenceSpec)
         spec.t_obs,                 
         spec.obs_state_idx,         
         spec.initial_conditions,    
-        spec.fixed_params,          
+        spec.uncertain_param_values,          
         spec.tspan;                 
         solver = spec.solver,       
-        dt     = spec.dt            
+        dt= spec.dt            
     )
     
     return nothing

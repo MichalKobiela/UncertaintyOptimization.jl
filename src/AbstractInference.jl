@@ -60,8 +60,8 @@ struct BayesianSpec <: InferenceSpec
     obs_state_idx::Int
     initial_conditions::Vector{Float64}
     tspan::Tuple{Float64, Float64}
-    fixed_params::Dict
-    
+    uncertain_param_values::Dict
+
     # Bayesian-specific fields
     noise_prior::Distribution
     sampler::Any
@@ -78,7 +78,7 @@ struct BayesianSpec <: InferenceSpec
                       obs_state_idx::Int=1,
                       initial_conditions::Vector{Float64},
                       tspan::Tuple{Float64, Float64},
-                      fixed_params::Dict=Dict(),
+                      uncertain_param_values::Dict=Dict(),
                       noise_prior::Distribution=InverseGamma(2, 3),
                       sampler=NUTS(0.65),
                       n_samples::Int=1000,
@@ -97,7 +97,7 @@ struct BayesianSpec <: InferenceSpec
         end
         
         new(data, t_obs, obs_state_idx, initial_conditions, tspan,
-            fixed_params, noise_prior, sampler, n_samples, n_chains,
+            uncertain_param_values, noise_prior, sampler, n_samples, n_chains,
             sampling_method, solver, dt)
     end
 end

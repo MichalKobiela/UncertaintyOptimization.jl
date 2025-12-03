@@ -58,7 +58,7 @@ end
 # Inference hook
 # -------------------------------------------------------------------------
 
-function evaluate_model(model::Model, parameters)
+function evaluate_model(model::Model, p_vec)
 
     if model.simulation_context === nothing
         error("Model not prepared for simulation. Call setup_simulation!")
@@ -67,8 +67,8 @@ function evaluate_model(model::Model, parameters)
     ctx = model.simulation_context
 
     # Reuse the already created problem and update
-    new_p = model.buffer_func(parameters)
-    model.param_setter(new_p, parameters)
+    new_p = model.buffer_func(p_vec)
+    model.param_setter(new_p, p_vec)
     prob_new = remake(model.prob; p=new_p)
 
     sol = solve(prob_new, ctx.solver; 
@@ -164,15 +164,15 @@ function setup_simulation!(model::Model,
                           t_obs::Vector{Float64},
                           obs_state_idx::Int,
                           initial_conditions::Vector{Float64},
-                          parameters::Dict,
+                          uncertain_param_values::Dict,
                           tspan::Tuple{Float64, Float64};
                           solver=Rosenbrock23(),
                           dt::Float64=0.01)
     
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
     p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
-    
-    all_params = merge(u0, p_map, parameters)
+
+    all_params = merge(u0, p_map, uncertain_param_values) # override here, be careful as it assumes values have been provided
     model.prob = ODEProblem(model.sys, all_params, tspan)
     
     uncertain_names = get_uncertain_parameters(model)
@@ -189,7 +189,13 @@ function setup_simulation!(model::Model,
         solver = solver,
         dt = dt
     )
-    
+    println("--------------------------------------------------")
     println("✅ Model ready for simulation")
+    println("--------------------------------------------------")
+    println("🔍 Uncertain parameters:")
+    for (i, up) in enumerate(model.uncertain_params)
+        println("  $i: ", up, "  initial=", uncertain_param_values[Symbol(up)])
+    end
+    println("--------------------------------------------------")
     return nothing
 end

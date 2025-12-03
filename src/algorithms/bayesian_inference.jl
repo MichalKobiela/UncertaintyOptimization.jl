@@ -12,10 +12,11 @@ function run_inference(model::Model, spec::BayesianSpec)
 
     # 2. Build turing model
     optim_model = _build_turing_model(model, spec)
-
+    fit_fcn = optim_model()
+    
     # 3. Run sampling
     chain = sample(
-        optim_model(),
+        fit_fcn,
         spec.sampler,
         spec.sampling_method,
         spec.n_samples,
@@ -37,7 +38,7 @@ function make_prior(prior::Dict)
 
     dist = lowercase(prior["distribution"])
     if dist == "uniform"
-        return truncated(Uniform(prior["lower"], prior["upper"]), lower = prior["lower"])
+        return truncated(Distributions.Uniform(prior["lower"], prior["upper"]), lower = prior["lower"])
     else
         error("Unsupported prior distribution: $(prior["distribution"])")
     end
@@ -94,11 +95,11 @@ function _build_turing_model(model::Model, spec::BayesianSpec)
 
         p_vec = getindex.(Ref(uncertain_param), uncertain_vec)
 
-        #numeric_vals = first.(p_vec)  # extract real value from Dual numbers
+       # numeric_vals = first.(p_vec)  # extract real value from Dual numbers
         # print for debugging orders
-        #println("Correct canonical-order parameter vector:")
-        #for (name, val) in zip(uncertain_vec, numeric_vals)
-           # println("    $name => $val")
+       # println("Correct canonical-order parameter vector:")
+       # for (name, val) in zip(uncertain_vec, numeric_vals)
+       #     println("    $name => $val")
        # end
         
         predicted = evaluate_model(model, p_vec)
