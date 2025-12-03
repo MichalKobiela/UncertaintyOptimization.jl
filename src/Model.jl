@@ -166,7 +166,7 @@ function setup_simulation!(model::Model,
                           initial_conditions::Vector{Float64},
                           uncertain_param_values::Dict,
                           tspan::Tuple{Float64, Float64};
-                          solver=Rosenbrock23(),
+                          solver=Euler(),
                           dt::Float64=0.01)
     
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)

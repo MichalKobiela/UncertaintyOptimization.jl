@@ -93,7 +93,7 @@ function _build_turing_model(model::Model, spec::BayesianSpec)
         #println("Turing uncertain_param dict keys (order of insertion): ", uncertain_param)
         #println("Canonical uncertain parameters order (uncertain_vec): ", uncertain_vec)
 
-        p_vec = getindex.(Ref(uncertain_param), uncertain_vec)
+        #p_vec = getindex.(Ref(uncertain_param), uncertain_vec)
 
        # numeric_vals = first.(p_vec)  # extract real value from Dual numbers
         # print for debugging orders

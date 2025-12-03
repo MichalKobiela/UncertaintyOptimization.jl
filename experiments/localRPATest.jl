@@ -86,14 +86,14 @@ data = convert(Array, randomized)
 spec = BayesianSpec(
      data = data,
      t_obs = t_obs,
-     obs_state_idx = 1,
+     obs_state_idx = 2,
      initial_conditions = [1.0, 1.0],
-     tspan = (0.0, 100.0),
+     tspan = (0.0, 2.0),
      uncertain_param_values = params,
      noise_prior = InverseGamma(2,3),
      sampler = NUTS(0.65),
-     n_samples = 1000,
-     n_chains = 5,
+     n_samples = 500,
+     n_chains = 1,
      solver = Euler(),
      dt = 0.01
  )
@@ -109,7 +109,7 @@ function extract_uncertain_posteriors(chain::Chains; n_samples::Int=500)
       return DataFrame(samples_array, Symbol.(clean_names))
 end
 
-posterior_df = extract_uncertain_posteriors(chain; n_samples=500)  # returns DataFrame
+posterior_df = extract_uncertain_posteriors(chain; n_samples=500)
 print(posterior_df)
 
 posterior_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
