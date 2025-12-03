@@ -118,7 +118,7 @@ function simulate!(model::Model,
                    initial_conditions::Vector{Float64},
                    parameters::Dict,
                    tspan::Tuple{Float64, Float64};
-                   solver=Tsit5(),
+                   solver=Rosenbrock23(),
                    dt::Float64=0.01,
                    saveat=Float64[])
     
@@ -129,6 +129,7 @@ function simulate!(model::Model,
     # Merge them all together - here user defined params will override existing
     all_params = merge(u0, p_map, parameters)
 
+    #println(parameters)
     # Currently supports ODE but can add a contiditional here based on what the
     # user specifies
     model.prob = ODEProblem(model.sys, all_params, tspan)
@@ -165,7 +166,7 @@ function setup_simulation!(model::Model,
                           initial_conditions::Vector{Float64},
                           parameters::Dict,
                           tspan::Tuple{Float64, Float64};
-                          solver=Euler(),
+                          solver=Rosenbrock23(),
                           dt::Float64=0.01)
     
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
@@ -177,6 +178,7 @@ function setup_simulation!(model::Model,
     uncertain_names = get_uncertain_parameters(model)
     model.uncertain_params = [getproperty(model.sys, name) for name in uncertain_names]
     model.param_setter = setp(model.sys, model.uncertain_params)
+
     model.buffer_func = (p) -> remake_buffer(
         model.sys, model.prob.p, Dict(zip(model.uncertain_params, p))
     )

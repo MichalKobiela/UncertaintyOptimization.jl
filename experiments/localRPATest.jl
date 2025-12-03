@@ -52,9 +52,9 @@ init_cond = [1.0, 1.0]  # Initial conditions for [A, B]
 # Parameters to simulate with (ground truth values)
 params = Dict(
         :beta_RA => 0.1,
-        :beta_AB => 0.001,
         :beta_BA => 0.01,
-        :beta_BB => 0.001
+        :beta_BB => 0.001,
+        :beta_AB => 0.001,    
     )
         
 tspan = (0.0, 100.0)  # Simulate from t=0 to t=100
@@ -62,51 +62,58 @@ tspan = (0.0, 100.0)  # Simulate from t=0 to t=100
 # Run simulation
 sol = simulate!(model, init_cond, params, tspan)
 
-t_obs = collect(range(1, stop = 90, length = 30))
-randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
-data = convert(Array, randomized)
+plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
+savefig("./test/test-plots/simulation_plot.png")
 
-spec = BayesianSpec(
-    data = data,
-    t_obs = t_obs,
-    initial_conditions = [1.0, 1.0],
-    tspan = (0.0, 100.0),
-    noise_prior = InverseGamma(2,3),
-    sampler = NUTS(0.65),
-    n_samples = 1000,
-    n_chains = 3,
-    solver = Euler(),
-    dt = 0.01
-)
+# CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
 
-@time chain = run_inference(model, spec)
+# t_obs = collect(range(1, stop = 90, length = 30))
+# randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
+# data = convert(Array, randomized)
 
 
-function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000)
-    names_in_chain = names(chain)
-    uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
-    sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)
-    samples_array = Array(sampled_chain)
-    clean_names = Symbol.(replace.(string.(uncertain_params), r"uncertain_param\[:(.+)\]" => s"\1"))
-    return DataFrame(samples_array, Symbol.(clean_names))
-end
+# spec = BayesianSpec(
+#     data = data,
+#     t_obs = t_obs,
+#     initial_conditions = [1.0, 1.0],
+#     tspan = (0.0, 100.0),
+#     noise_prior = InverseGamma(2,3),
+#     sampler = NUTS(0.65),
+#     n_samples = 1000,
+#     n_chains = 3,
+#     solver = Euler(),
+#     dt = 0.01
+# )
 
-posterior_df = extract_uncertain_posteriors(chain; n_samples=1000)  # returns DataFrame
-samples = Array(posterior_df)  # convert to plain array if desired
+# @time chain = run_inference(model, spec)
+# println(names(chain))
 
-# --- Save the full chain ---
-f = open(".//experiments//RPA_data//posterior_chains_new.jls", "w")
-serialize(f, chain)
-close(f)
+# function extract_uncertain_posteriors(chain::Chains; n_samples::Int=1000)
+#      names_in_chain = names(chain)
+#      uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
+#      sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)
+#      samples_array = Array(sampled_chain)
+#      clean_names = Symbol.(replace.(string.(uncertain_params), r"uncertain_param\[:(.+)\]" => s"\1"))
+#      return DataFrame(samples_array, Symbol.(clean_names))
+#  end
 
-# --- Load the chain back (if needed) ---
-f = open(".//experiments//RPA_data//posterior_chains_new.jls", "r")
-chain = deserialize(f)
-close(f)
+#  posterior_df = extract_uncertain_posteriors(chain; n_samples=1000)  # returns DataFrame
+#  print(posterior_df)
+#  samples = Array(posterior_df)  # convert to plain array if desired
 
-# --- Save posterior samples separately ---
-f = open(".//experiments//RPA_data//posterior_samples_new.jls", "w")
-serialize(f, samples)
-close(f)
+#   # --- Save the full chain ---
+#   f = open(".//experiments//RPA_data//posterior_chains_new.jls", "w")
+#   serialize(f, chain)
+#   close(f)
 
-CSV.write(".//experiments//RPA_data//posterior_samples_new.csv",  Tables.table(samples), writeheader=false)
+#   # --- Load the chain back (if needed) ---
+#   f = open(".//experiments//RPA_data//posterior_chains_new.jls", "r")
+#   chain = deserialize(f)
+#   close(f)
+
+#   # --- Save posterior samples separately ---
+#   f = open(".//experiments//RPA_data//posterior_samples_new.jls", "w")
+#   serialize(f, samples)
+#   close(f)
+
+#   CSV.write(".//experiments//RPA_data//posterior_samples_new.csv",  Tables.table(samples))

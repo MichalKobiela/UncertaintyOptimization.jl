@@ -1,6 +1,6 @@
 using Turing
 using Distributions
-
+using DynamicPPL
 
 function run_inference(model::Model, spec::BayesianSpec)
 
@@ -37,7 +37,7 @@ function make_prior(prior::Dict)
 
     dist = lowercase(prior["distribution"])
     if dist == "uniform"
-        return truncated(Uniform(prior["lower"], prior["upper"]))
+        return truncated(Uniform(prior["lower"], prior["upper"]), lower = prior["lower"])
     else
         error("Unsupported prior distribution: $(prior["distribution"])")
     end
@@ -78,6 +78,7 @@ function _build_turing_model(model::Model, spec::BayesianSpec)
     priors = make_priors(model)
     
     uncertain_vec = collect(uncertain_params)
+    
 
     @model function turing_model()
 
@@ -85,11 +86,20 @@ function _build_turing_model(model::Model, spec::BayesianSpec)
 
         uncertain_param = Dict{Symbol, Float64}()
 
-        for pname in uncertain_vec
-            uncertain_param[pname] ~ priors[pname]  
+        for name in uncertain_vec
+            uncertain_param[name] ~ priors[name]  
         end
+        #println("Turing uncertain_param dict keys (order of insertion): ", uncertain_param)
+        #println("Canonical uncertain parameters order (uncertain_vec): ", uncertain_vec)
 
-        p_vec = [uncertain_param[n] for n in uncertain_vec]
+        p_vec = getindex.(Ref(uncertain_param), uncertain_vec)
+
+        #numeric_vals = first.(p_vec)  # extract real value from Dual numbers
+        # print for debugging orders
+        #println("Correct canonical-order parameter vector:")
+        #for (name, val) in zip(uncertain_vec, numeric_vals)
+           # println("    $name => $val")
+       # end
         
         predicted = evaluate_model(model, p_vec)
 
