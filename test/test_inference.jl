@@ -2,27 +2,86 @@ using Test
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t
 using Distributions
+using OrdinaryDiffEq
 include("helpers/mock_rpa.jl")
 using .MockRPA
 
 @testset "Bayesian Inference Tests" begin
     
-    @testset "Parameter order matches" begin
+    @testset "Test simulation" begin
         
         model_def = MockRPA.mock_rpa_model()
         @mtkcompile sys = System(model_def.equations, t)
         model = UncertaintyOptimization.Model(model_def, sys)
 
-        uncertain = UncertaintyOptimization.get_uncertain_parameters(model)
+        # Define simulation parameters
+        init_cond = [1.0, 1.0]
+                    
+        # Ground truth values
+        params = Dict(
+                :beta_RA => 0.1,
+                :beta_BA => 0.001, 
+                :beta_AB => 0.01,
+                :beta_BB => 0.001,    
+            )
+                    
+        tspan = (0.0, 2.0)  # Short window for testing
+                    
+        # Run simulation
+        sol = simulate!(model, init_cond, params, tspan)
 
-        #Check the order
-        @test uncertain == [:beta_RA, :beta_AB, :beta_BA, :beta_BB]
-        
-        println("✅ Test 1: Parameter order is correct")
+        # Generate noisy observations
+        t_obs = collect(range(1, stop = 2, length = 30))  # Change to range(1, 90, 30) for full validation
+        randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
+        data = convert(Array, randomized)
 
-    end
+        setup_simulation!(model,
+                            t_obs,
+                            1,
+                            init_cond,
+                            params,
+                            tspan;
+                            solver=Euler(),
+                            dt=0.01)
 
 
+            println(model.prob.u0)       # initial conditions
+            println(model.prob.tspan)    # time span
+            println(model.prob.p)        # parameters
+
+            println(equations(model.sys))
+            println(unknowns(model.sys))
+            println(parameters(model.sys))
+
+
+        #Check the parameters have the correct starting values
+        correct_values = [1.0, 1.0, 1.0, 1.0, 0.001, 1.0, 1.0, 1.0, 100.0, 
+                          1.0, 0.01, 0.1, 100.0, 1.0, 0.001, 1.0, 1.0]
+
+        @test all(model.prob.p .== correct_values)
+
+   
+
+    uncertain_syms = model.uncertain_params
+    println(uncertain_syms)
+
+    buffer_fcn = model.buffer_func
+
+    # Order in sys
+    #[beta_BA,  beta_AB, beta_RA, beta_BB]
+    # [0.003, 0.004, 0.01, 0.02]
+
+    #Order of uncertain_syms
+    #[beta_RA, beta_BA, beta_BB, beta_AB]
+
+    p_test = [0.01, 0.003, 0.02, 0.004] 
+    buffer = model.buffer_func(p_test)
+    println(parameters(model.sys))
+    println(buffer)
+
+    #TO DO: WRITE AUTO TEST TO MAKE SURE THAT THE PARAMETERS GET UPDATED BY NAME FROM THE BUFFER
+
+ end
 
 end
 

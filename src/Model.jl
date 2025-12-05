@@ -1,6 +1,8 @@
 using ModelingToolkit
 using OrdinaryDiffEq
 using SymbolicIndexingInterface
+using SciMLStructures: Tunable, canonicalize, replace, replace!
+using PreallocationTools
 """
 Model
 
@@ -34,7 +36,7 @@ mutable struct Model
 
     end
 end
-# -------------------------------------------------------------------------
+# ----------------------------------------------------------s---------------
 # Helpers
 # -------------------------------------------------------------------------
 
@@ -59,16 +61,16 @@ end
 # -------------------------------------------------------------------------
 
 function evaluate_model(model::Model, p_vec)
-
     if model.simulation_context === nothing
         error("Model not prepared for simulation. Call setup_simulation!")
     end
 
     ctx = model.simulation_context
 
-    # Reuse the already created problem and update
     new_p = model.buffer_func(p_vec)
+    
     model.param_setter(new_p, p_vec)
+
     prob_new = remake(model.prob; p=new_p)
 
     sol = solve(prob_new, ctx.solver; 
@@ -77,8 +79,6 @@ function evaluate_model(model::Model, p_vec)
                 save_idxs=ctx.obs_state_idx)
     
     return Array(sol)
-
-
 end
 
 # -------------------------------------------------------------------------
@@ -116,9 +116,9 @@ Runs a simple one off simulation and stores the results
 
 function simulate!(model::Model, 
                    initial_conditions::Vector{Float64},
-                   parameters::Dict,
+                   parameters::Any,
                    tspan::Tuple{Float64, Float64};
-                   solver=Rosenbrock23(),
+                   solver=Euler(),
                    dt::Float64=0.01,
                    saveat=Float64[])
     
@@ -132,19 +132,19 @@ function simulate!(model::Model,
     #println(parameters)
     # Currently supports ODE but can add a contiditional here based on what the
     # user specifies
-    model.prob = ODEProblem(model.sys, all_params, tspan)
+    prob = ODEProblem(model.sys, all_params, tspan)
 
     # Solve the Problem
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
 
     if isempty(saveat)
-        model.sol = solve(model.prob, solver, dt=dt)
+        sol = solve(prob, solver; dt=dt)
     else
-        model.sol = solve(model.prob, solver, dt=dt, saveat=saveat)
+        sol = solve(prob, solver; dt=dt, saveat=saveat)
     end
 
-    return model.sol
+    return sol
 end
 
 """
@@ -169,33 +169,59 @@ function setup_simulation!(model::Model,
                           solver=Euler(),
                           dt::Float64=0.01)
     
+    # Get states from the compiled system
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
-    p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
+    # Get all the parameters and their values as pairs for input into the problem - like mtk expects
+    # BUT ovveride with new starting values if they have been provided
+    p_map = Dict{Symbol, Float64}()
+    uncertain_param_names = []
 
-    all_params = merge(u0, p_map, uncertain_param_values) # override here, be careful as it assumes values have been provided
+    # For all uncertain parameters in the model_definition
+    for(name, param_spec) in model.model_def.parameters
+        if param_spec.value !== nothing
+            p_map[name] = param_spec.value
+        end
+
+        if param_spec.role == :uncertain
+            push!(uncertain_param_names, name)
+        end
+
+        # Now check if the user has provided new values
+        for (param_name, param_value) in uncertain_param_values
+            p_map[param_name] = param_value
+        end
+
+    end
+
+    # This creates the dictionary that MTK needs to build the problem
+    all_params = merge(u0, p_map)
+    
+    # Create the problem with all parameters and their starting values - including user provided ones
     model.prob = ODEProblem(model.sys, all_params, tspan)
     
-    uncertain_names = get_uncertain_parameters(model)
-    model.uncertain_params = [getproperty(model.sys, name) for name in uncertain_names]
-    model.param_setter = setp(model.sys, model.uncertain_params)
+    uncertain_syms = Vector{Any}(undef, length(uncertain_param_names))
+
+    for (i, name) in enumerate(uncertain_param_names)
+        uncertain_syms[i] = getproperty(model.sys, name)
+    end
+
+    model.uncertain_params =  uncertain_syms
+
+    model.param_setter = setp(model.sys, uncertain_syms)
+
 
     model.buffer_func = (p) -> remake_buffer(
-        model.sys, model.prob.p, Dict(zip(model.uncertain_params, p))
+        model.sys, model.prob.p, Dict(zip(uncertain_syms, p))
     )
     
     model.simulation_context = (
         t_obs = t_obs,
         obs_state_idx = obs_state_idx,
         solver = solver,
-        dt = dt
-    )
-    println("--------------------------------------------------")
-    println("✅ Model ready for simulation")
-    println("--------------------------------------------------")
-    println("🔍 Uncertain parameters:")
-    for (i, up) in enumerate(model.uncertain_params)
-        println("  $i: ", up, "  initial=", uncertain_param_values[Symbol(up)])
-    end
-    println("--------------------------------------------------")
+        dt = dt)
+
+    println("Ready for inference...")
+
+
     return nothing
 end

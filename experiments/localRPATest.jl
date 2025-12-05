@@ -14,6 +14,7 @@ using CSV, Tables
 using Plots
 using DataFrames
 
+
 Random.seed!(0);
 
 """
@@ -38,112 +39,247 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
     be used to generated similar results to the original paper.
 
 """
-og_posterior_file = "./test/test-data/posterior_samples_og.csv"
-og_posterior_data = CSV.File(og_posterior_file; header=false) |> Tables.matrix
+function print_sys_parameters(sys)
+    pars = parameters(sys)  # get all parameters in the system
+    param_dict = Dict{Symbol, Float64}()
 
-param_names = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
+    println("Model parameters:")
+    for p in pars
+        val = getproperty(sys, p.name)
+        param_dict[p.name] = Float64(val)  # ensure numeric
+        println("  $(p.name) = $(val)")
+    end
 
-# Compute min and max for each parameter
-param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
-for (i, name) in enumerate(param_names)
-    param_ranges[name] = (minimum(og_posterior_data[:, i]), maximum(og_posterior_data[:, i]))
+    return param_dict  # also return as a Dict if needed
 end
 
+
+# Load model
 RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 
-# # Compile the system once
+# Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
 
 model = Model(RPA_model, sys)
 
-# # Define simulation parameters
-init_cond = [1.0, 1.0]  # Initial conditions for [A, B]
+# Define simulation parameters
+init_cond = [1.0, 1.0]
         
-# # Parameters to simulate with (ground truth values)
+# Ground truth values (must match original)
 params = Dict(
-         :beta_RA => 0.1,
-         :beta_AB => 0.001,
-         :beta_BA => 0.01,
-         :beta_BB => 0.001,    
-     )
-        
- tspan = (0.0, 100.0)  # Simulate from t=0 to t=100
+    :beta_RA => 0.1,
+    :beta_AB => 0.001,
+    :beta_BA => 0.01,
+    :beta_BB => 0.001
+)
+  
+tspan = (0.0, 100.0)  # Change to 100.0 for full validation
         
 # Run simulation
- sol = simulate!(model, init_cond, params, tspan)
-
-# plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
-# savefig("./test/test-plots/simulation_plot.png")
-
+sol = simulate!(model, init_cond, params, tspan)
 
 CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
 
-t_obs = collect(range(1, stop = 90, length = 30))
+# Generate noisy observations
+t_obs = collect(range(1, stop = 90, length = 30))  # Change to range(1, 90, 30) for full validation
 randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
 data = convert(Array, randomized)
 
+setup_simulation!(model,
+                  t_obs,
+                  1,
+                  init_cond,
+                  params,
+                  tspan;
+                  solver=Euler(),
+                  dt=0.01)
 
-spec = BayesianSpec(
-     data = data,
-     t_obs = t_obs,
-     obs_state_idx = 2,
-     initial_conditions = [1.0, 1.0],
-     tspan = (0.0, 2.0),
-     uncertain_param_values = params,
-     noise_prior = InverseGamma(2,3),
-     sampler = NUTS(0.65),
-     n_samples = 500,
-     n_chains = 1,
-     solver = Euler(),
-     dt = 0.01
- )
+lbc_func = model.buffer_func
+setter_p! = setp(model.sys, model.uncertain_params)
 
-@time chain = run_inference(model, spec)
+@model function fit(data, prob, lbc_func, setter_p!)
 
-function extract_uncertain_posteriors(chain::Chains; n_samples::Int=500)
-      names_in_chain = names(chain)
-      uncertain_params = filter(n -> occursin("uncertain_param", string(n)), names_in_chain)
-      sampled_chain = sample(chain[uncertain_params], n_samples, replace=false)
-      samples_array = Array(sampled_chain)
-      clean_names = Symbol.(replace.(string.(uncertain_params), r"uncertain_param\[:(.+)\]" => s"\1"))
-      return DataFrame(samples_array, Symbol.(clean_names))
+    σ ~ InverseGamma(2, 3)
+    beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+    beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+
+    # Combine parameters
+    p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
+
+    # Create fast buffer for these parameter values
+    new_p = lbc_func(p_vec)
+    setter_p!(new_p, p_vec)
+    prob_tmp = remake(prob; p=new_p)
+
+    # Change to array because we are working with the ODESystem
+    predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
+    data ~ MvNormal(predicted, σ^2 * I(length(data)))
+
+    return nothing
 end
 
-posterior_df = extract_uncertain_posteriors(chain; n_samples=500)
-print(posterior_df)
+model2 = fit(data, model.prob, lbc_func, setter_p!)
 
-posterior_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
-for name in param_names
-    col = posterior_df[!, name]  # explicitly select by column name
-    posterior_ranges[name] = (minimum(col), maximum(col))
-end
+@time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=true)
 
-# Compare to the original ranges
-for name in param_names
-    og_min, og_max = param_ranges[name]
-    post_min, post_max = posterior_ranges[name]
+posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 1000; replace=false)
+samples = Array(posterior_samples)
+# -------------Compare to the previous data-----------------------------------
 
-    println("Parameter: $name")
-    println("  Original min/max: $og_min / $og_max")
-    println("  Posterior min/max: $post_min / $post_max")
+# Load original posterior samples
+og_posterior_file = "./test/test-data/posterior_samples_og.csv"
+og_posterior_data = CSV.File(og_posterior_file; header=false) |> Tables.matrix
 
-end
+# The original CSV has columns in THIS specific order
+column_order = [:beta_RA, :beta_BA, :beta_AB, :beta_BB]
 
-samples = Array(posterior_df) 
+# Build dict mapping parameter name -> (min, max) from original
+param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
 
-# --- Save the full chain ---
-f = open(".//experiments//RPA_data//posterior_chains_new.jls", "w")
-serialize(f, chain)
-close(f)
+for (i, name) in enumerate(column_order)
+     col_values = og_posterior_data[:, i]              # extract the column
+     min_val = minimum(col_values)
+     max_val = maximum(col_values)
+     param_ranges[name] = (min_val, max_val)
+     println("Column: $name  |  min: $min_val  max: $max_val")
+ end
 
-# --- Load the chain back (if needed) ---
-f = open(".//experiments//RPA_data//posterior_chains_new.jls", "r")
-chain = deserialize(f)
-close(f)
+ param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
 
-# --- Save posterior samples separately ---
-f = open(".//experiments//RPA_data//posterior_samples_new.jls", "w")
-serialize(f, samples)
-close(f)
+for (i, name) in enumerate(column_order)
+     col_values = samples[:, i]              # extract the column
+     min_val = minimum(col_values)
+     max_val = maximum(col_values)
+     param_ranges[name] = (min_val, max_val)
+     println("Column: $name  |  min: $min_val  max: $max_val")
+ end
 
 
+# # Run inference
+# spec = BayesianSpec(
+#      data = data,
+#      t_obs = t_obs,
+#      obs_state_idx = 1,
+#      initial_conditions = [1.0, 1.0],
+#      tspan = (0.0, 2.0),  # Change to 100.0 for full validation
+#      uncertain_param_values = params,
+#      noise_prior = InverseGamma(2,3),
+#      sampler = NUTS(0.65),
+#      n_samples = 1000,
+#      n_chains = 3,
+#      solver = Euler(),
+#      dt = 0.01
+#  )
+
+# @time chain = run_inference(model, spec)
+
+# println("Chain variable names: ", names(chain))
+
+# # Convert chain to DataFrame
+# posterior_df = DataFrame(chain)
+
+# # Clean up column names
+# #rename!(posterior_df, [name => Symbol(replace(string(name), r"^:" => "")) for name in names(posterior_df)])
+
+# #cols_of_interest = [:("p_vec[1]"), :("p_vec[2]"), :("p_vec[3]"), :("p_vec[4]")]
+# cols_of_interest = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
+# param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
+
+# for name in cols_of_interest
+#     col_values = posterior_df[!, name]   # extract column by name
+#     param_ranges[name] = (minimum(col_values), maximum(col_values))
+#     println("Column: $name | min: $(minimum(col_values)) max: $(maximum(col_values))")
+# end
+
+# param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
+
+# for (i, name) in enumerate(their_csv_order)
+#     col_values = og_posterior_data[:, i]              # extract the column
+#     min_val = minimum(col_values)
+#     max_val = maximum(col_values)
+#     param_ranges[name] = (min_val, max_val)
+#     println("Column: $name  |  min: $min_val  max: $max_val")
+# end
+
+# #println("Cleaned column names: ", names(posterior_df))
+
+# # Filter to uncertain parameters
+# #uncertain_param_cols = filter(name -> Symbol(name) in model.uncertain_params, names(posterior_df))
+
+# #println("\nPosterior Statistics:")
+# #println("="^60)
+# #println("Note: Comparing by parameter NAME, not column position")
+# #println("Your sampling order: ", model.uncertain_params)
+# #println("Original CSV order: ", their_csv_order)
+# #println("="^60)
+
+# # # Extract ranges for YOUR posteriors (by name)
+# # posterior_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
+# # for name in uncertain_param_cols
+# #     col = posterior_df[!, Symbol(name)]
+# #     posterior_ranges[Symbol(name)] = (minimum(col), maximum(col))
+# # end
+
+# # println(posterior_ranges)
+
+# # # Compare by parameter NAME (order-independent)
+# # for name in their_csv_order  # Iterate in their order for consistent display
+# #     if haskey(param_ranges, name) && haskey(posterior_ranges, name)
+# #         og_min, og_max = param_ranges[name]
+# #         post_min, post_max = posterior_ranges[name]
+        
+# #         println("\nParameter: $name")
+# #         println("  Original range:   [$og_min, $og_max]")
+# #         println("  Posterior range:  [$post_min, $post_max]")
+# #         println("  Width comparison: $(og_max - og_min) vs $(post_max - post_min)")
+        
+#         # Add a match quality indicator
+#         ratio = (post_max - post_min) / (og_max - og_min)
+#         if 0.7 < ratio < 1.3
+#             println("  ✅ Good match (within 30%)")
+#         elseif ratio > 2.0 || ratio < 0.5
+#             println("  ⚠️  Poor match (>2x difference)")
+#         else
+#             println("  ⚡ Moderate match")
+#         end
+#     else
+#         println("\n⚠️  Parameter $name not found in both datasets")
+#     end
+# end
+
+# # Save outputs - order doesn't matter here, names are preserved
+# samples = Matrix(posterior_df[!, uncertain_param_cols])
+
+# serialize(".//experiments//RPA_data//posterior_chains_new.jls", chain)
+# serialize(".//experiments//RPA_data//posterior_samples_new.jls", samples)
+
+# CSV.write(
+#     ".//experiments//RPA_data//posterior_samples.csv",
+#     DataFrame(samples, Symbol.(uncertain_param_cols)),
+#     writeheader=true
+# )
+
+# #println("\n" * "="^60)
+# #println("✅ Inference complete. Results saved.")
+# #println("="^60)
+
+#posterior_samples = sample(chain[[:("p_vec[1]"), :("p_vec[2]"), :("p_vec[3]"), :("p_vec[4]")]], 1000; replace=false)
+#samples = Array(posterior_samples)
+
+#println(posterior_samples)
+
+# f = open(".//experiments//RPA_data//posterior_chains.jls", "w")
+# serialize(f, chain)
+# close(f)
+
+# f = open(".//experiments//RPA_data//posterior_chains.jls", "r")
+# chain = deserialize(f)
+# close(f)
+
+# f = open(".//experiments//RPA_data//posterior_samples.jls", "w")
+# serialize(f, samples)
+# close(f)
+
+CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
