@@ -112,7 +112,11 @@ Runs a simple one off simulation and stores the results
 # Returns
 - The solution object (also stored in model.sol)
 
+SHOULD NOT MAKE ALTER THE MODEL!
+
 """
+
+
 
 function simulate!(model::Model, 
                    initial_conditions::Vector{Float64},
