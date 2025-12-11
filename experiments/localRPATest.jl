@@ -12,6 +12,8 @@ using PreallocationTools
 using Serialization
 using CSV, Tables
 using Plots
+using DataFrames
+
 
 Random.seed!(0);
 
@@ -38,7 +40,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 
 """
 
-
+# Load model
 RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 
 # Compile the system once
@@ -47,89 +49,78 @@ RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
-init_cond = [1.0, 1.0]  # Initial conditions for [A, B]
+init_cond = [1.0, 1.0]
         
-# Parameters to simulate with (ground truth values)
+# Ground truth values (must match original)
 params = Dict(
-        :beta_RA => 0.1,
-        :beta_AB => 0.001,
-        :beta_BA => 0.01,
-        :beta_BB => 0.001
-    )
-        
-tspan = (0.0, 100.0)  # Simulate from t=0 to t=100
+    :beta_RA => 0.1,
+    :beta_AB => 0.001,
+    :beta_BA => 0.01,
+    :beta_BB => 0.001
+)
+  
+tspan = (0.0, 100.0)
         
 # Run simulation
 sol = simulate!(model, init_cond, params, tspan)
 
-# --- Save solution to CSV ---
-CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u), writeheader=false)
+CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
 
-# --- Plot the solution ---
-plot(sol, xlabel="Time", ylabel="States", title="Simulation Results")
-savefig("./test/test-plots/simulation_plot.png")
+# Generate noisy observations
+t_obs = collect(range(1, stop = 90, length = 30)) 
+randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
+data = convert(Array, randomized)
 
+ # Run inference
+ spec = BayesianSpec(
+      data = data,
+      t_obs = t_obs,
+      obs_state_idx = 1,
+      initial_conditions = [1.0, 1.0],
+      tspan = (0.0, 100.0),
+      uncertain_param_values = params,
+      noise_prior = InverseGamma(2,3),
+      sampler = NUTS(0.65),
+      n_samples = 1000,
+      n_chains = 3,
+      solver = Euler(),
+      dt = 0.01
+  )
 
-# # --- Make some noisy observations and save---
-# t_obs = collect(range(1, stop = 90, length = 30))
-# randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
-# data = convert(Array, randomized)
-# CSV.write(".//experiments//RPA_data//rpa_data_true.csv", Tables.table(data), writeheader=false)
-
-# # --- Create an uncertain dictionary - could take this from the Model Definition later
-# uncertain_syms = [
-#     sys.beta_RA,
-#     sys.beta_AB,
-#     sys.beta_BA,
-#     sys.beta_BB
-# ]
-
-# # Create a lazy cache that remakes only buffers, not the entire problem
-# lbc_func = (p) -> remake_buffer(sys, rpa_prob.p, Dict(zip(uncertain_syms, p)))
-# # Create the parameter setter
-# setter_p! = setp(sys, uncertain_syms)
-
-# @model function fit(data, prob, lbc_func, setter_p!)
-
-#     σ ~ InverseGamma(2, 3)
-#     beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-#     beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-
-#     # Combine parameters
-#     p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
-
-#     # Create fast buffer for these parameter values
-#     new_p = lbc_func(p_vec)
-#     setter_p!(new_p, p_vec)
-#     prob_tmp = remake(prob; p=new_p)
-
-#     # Change to array because we are working with the ODESystem
-#     predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
-#     data ~ MvNormal(predicted, σ^2 * I(length(data)))
-
-#     return nothing
-# end
-
-# model2 = fit(data, rpa_prob, lbc_func, setter_p!)
-
-# @time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=false)
+ @time chain = run_inference(model, spec)
 
 
-# posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 1000; replace=false)
-# samples = Array(posterior_samples)
+posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
+samples = Array(posterior_samples)
 
-# f = open(".//experiments//RPA_data//posterior_chains.jls", "w")
-# serialize(f, chain)
-# close(f)
+# -------------Compare to the previous data-----------------------------------
 
-# f = open(".//experiments//RPA_data//posterior_chains.jls", "r")
-# chain = deserialize(f)
-# close(f)
+# # Load original posterior samples
+# og_posterior_file = "./test/test-data/posterior_samples_og.csv"
+# og_posterior_data = CSV.File(og_posterior_file; header=false) |> Tables.matrix
 
-# f = open(".//experiments//RPA_data//posterior_samples.jls", "w")
-# serialize(f, samples)
-# close(f)
+# # The original CSV has columns in THIS specific order
+# column_order = [:beta_RA, :beta_BA, :beta_AB, :beta_BB]
 
-# CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
+# # Build dict mapping parameter name -> (min, max) from original
+# param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
+
+# for (i, name) in enumerate(column_order)
+#      col_values = og_posterior_data[:, i]              # extract the column
+#      min_val = minimum(col_values)
+#      max_val = maximum(col_values)
+#      param_ranges[name] = (min_val, max_val)
+#      println("Column: $name  |  min: $min_val  max: $max_val")
+#  end
+
+#  param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
+
+# for (i, name) in enumerate(column_order)
+#      col_values = samples[:, i]              # extract the column
+#      min_val = minimum(col_values)
+#      max_val = maximum(col_values)
+#      param_ranges[name] = (min_val, max_val)
+#      println("Column: $name  |  min: $min_val  max: $max_val")
+#  end
+
+CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=true)
