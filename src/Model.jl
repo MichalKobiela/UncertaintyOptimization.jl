@@ -131,7 +131,7 @@ function simulate!(model::Model,
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
     p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
     # Merge them all together - here user defined params will override existing
-    all_params = merge(u0, p_map, parameters)
+    all_params = merge(u0, p_map)
 
     #println(parameters)
     # Currently supports ODE but can add a contiditional here based on what the
@@ -143,9 +143,9 @@ function simulate!(model::Model,
     # Otherwise use the specific time points provided
 
     if isempty(saveat)
-        sol = solve(prob, solver; dt=dt)
+        sol = solve(prob, solver; p=parameters, dt=dt)
     else
-        sol = solve(prob, solver; dt=dt, saveat=saveat)
+        sol = solve(prob, solver; p=parameters, dt=dt, saveat=saveat)
     end
 
     return sol
