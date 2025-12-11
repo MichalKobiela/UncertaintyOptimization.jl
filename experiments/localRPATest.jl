@@ -85,46 +85,64 @@ t_obs = collect(range(1, stop = 90, length = 30))  # Change to range(1, 90, 30) 
 randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
 data = convert(Array, randomized)
 
-setup_simulation!(model,
-                  t_obs,
-                  1,
-                  init_cond,
-                  params,
-                  tspan;
-                  solver=Euler(),
-                  dt=0.01)
+ # Run inference
+ spec = BayesianSpec(
+      data = data,
+      t_obs = t_obs,
+      obs_state_idx = 1,
+      initial_conditions = [1.0, 1.0],
+      tspan = (0.0, 100.0),  # Change to 100.0 for full validation
+      uncertain_param_values = params,
+      noise_prior = InverseGamma(2,3),
+      sampler = NUTS(0.65),
+      n_samples = 1000,
+      n_chains = 3,
+      solver = Euler(),
+      dt = 0.01
+  )
 
-lbc_func = model.buffer_func
-setter_p! = setp(model.sys, model.uncertain_params)
+ @time chain = run_inference(model, spec)
 
-@model function fit(data, prob, lbc_func, setter_p!)
+# setup_simulation!(model,
+#                   t_obs,
+#                   1,
+#                   init_cond,
+#                   params,
+#                   tspan;
+#                   solver=Euler(),
+#                   dt=0.01)
 
-    σ ~ InverseGamma(2, 3)
-    beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-    beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-    beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
-    beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+# lbc_func = model.buffer_func
+# setter_p! = setp(model.sys, model.uncertain_params)
 
-    # Combine parameters
-    p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
+# @model function fit(data, prob, lbc_func, setter_p!)
 
-    # Create fast buffer for these parameter values
-    new_p = lbc_func(p_vec)
-    setter_p!(new_p, p_vec)
-    prob_tmp = remake(prob; p=new_p)
+#     σ ~ InverseGamma(2, 3)
+#     beta_RA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+#     beta_AB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+#     beta_BA ~ truncated(Uniform(0.0, 1.0), lower=0.0)
+#     beta_BB ~ truncated(Uniform(0.0, 1.0), lower=0.0)
 
-    # Change to array because we are working with the ODESystem
-    predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
-    data ~ MvNormal(predicted, σ^2 * I(length(data)))
+#     # Combine parameters
+#     p_vec = [beta_RA, beta_AB, beta_BA, beta_BB]
 
-    return nothing
-end
+#     # Create fast buffer for these parameter values
+#     new_p = lbc_func(p_vec)
+#     setter_p!(new_p, p_vec)
+#     prob_tmp = remake(prob; p=new_p)
 
-model2 = fit(data, model.prob, lbc_func, setter_p!)
+#     # Change to array because we are working with the ODESystem
+#     predicted = Array(solve(prob_tmp, Euler(); dt=0.01, saveat=t_obs, save_idxs=1))
+#     data ~ MvNormal(predicted, σ^2 * I(length(data)))
 
-@time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=true)
+#     return nothing
+# end
 
-posterior_samples = sample(chain[[:beta_RA, :beta_AB, :beta_BA, :beta_BB]], 1000; replace=false)
+# model2 = fit(data, model.prob, lbc_func, setter_p!)
+
+# @time chain = sample(model2, NUTS(0.65), MCMCThreads(), 1000, 3; progress=true)
+
+posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
 samples = Array(posterior_samples)
 # -------------Compare to the previous data-----------------------------------
 
@@ -156,24 +174,8 @@ for (i, name) in enumerate(column_order)
      println("Column: $name  |  min: $min_val  max: $max_val")
  end
 
+CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
 
-# # Run inference
-# spec = BayesianSpec(
-#      data = data,
-#      t_obs = t_obs,
-#      obs_state_idx = 1,
-#      initial_conditions = [1.0, 1.0],
-#      tspan = (0.0, 2.0),  # Change to 100.0 for full validation
-#      uncertain_param_values = params,
-#      noise_prior = InverseGamma(2,3),
-#      sampler = NUTS(0.65),
-#      n_samples = 1000,
-#      n_chains = 3,
-#      solver = Euler(),
-#      dt = 0.01
-#  )
-
-# @time chain = run_inference(model, spec)
 
 # println("Chain variable names: ", names(chain))
 
@@ -282,4 +284,4 @@ for (i, name) in enumerate(column_order)
 # serialize(f, samples)
 # close(f)
 
-CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=false)
+#

@@ -122,7 +122,7 @@ function simulate!(model::Model,
                    initial_conditions::Vector{Float64},
                    parameters::Any,
                    tspan::Tuple{Float64, Float64};
-                   solver=Euler(),
+                   solver=Rosenbrock23(),
                    dt::Float64=0.01,
                    saveat=Float64[])
     
