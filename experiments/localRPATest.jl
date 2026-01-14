@@ -60,6 +60,8 @@ params = Dict(
 )
   
 tspan = (0.0, 100.0)
+
+sampling_size = 1000
         
 # Run simulation
 sol = simulate!(model, init_cond, params, tspan)
@@ -72,7 +74,7 @@ randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_ob
 data = convert(Array, randomized)
 
  # Run inference
- spec = BayesianSpec(
+spec = BayesianSpec(
       data = data,
       t_obs = t_obs,
       obs_state_idx = 1,
@@ -81,19 +83,40 @@ data = convert(Array, randomized)
       uncertain_param_values = params,
       noise_prior = InverseGamma(2,3),
       sampler = NUTS(0.65),
-      n_samples = 1000,
+      n_samples = sampling_size,
       n_chains = 3,
       solver = Euler(),
       dt = 0.01
   )
 
- @time chain = run_inference(model, spec)
+@time chain = run_inference(model, spec)
 
-
-posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
-samples = Array(posterior_samples)
+betas = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
 
 # -------------Compare to the previous data-----------------------------------
+
+## Test if posterior distribution recovers the ground truths
+function ci_contains_truth(chain, p::Symbol, truth::Real; level=0.95)
+    α = 1 - level
+    posterior_draws = vec(Array(chain[p]))
+    lo, hi = quantile(posterior_draws, (α/2, 1-α/2))
+    μ = mean(posterior_draws)
+    return (param=p, mean=μ, lo=lo, hi=hi, truth=Float64(truth), in_CI=(lo <= truth <= hi))
+end
+
+truths = [params[beta] for beta in betas]
+rows = ci_contains_truth.(Ref(chain), betas, truths; level=0.95)
+
+for row in rows
+    println("Result: $(row)")
+end
+
+# subsample
+posterior_samples = sample(chain[betas], sampling_size; replace=false)
+samples = Array(posterior_samples)
+
+
+# -------------Compare to the previous data 2----------------------------------
 
 # # Load original posterior samples
 # og_posterior_file = "./test/test-data/posterior_samples_og.csv"

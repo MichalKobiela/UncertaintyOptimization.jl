@@ -106,6 +106,7 @@ end
                                saveat=spec.t_obs, 
                                save_idxs=spec.obs_state_idx))
         
+        # println("predicted $(predicted)")
         data ~ MvNormal(predicted, σ^2 * I(length(data)))
         
     end
