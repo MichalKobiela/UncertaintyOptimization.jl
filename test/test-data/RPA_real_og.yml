@@ -1,0 +1,124 @@
+experiment:
+  name: "RPA"
+  description: "A two gene robust perfect adaptation circuit with real data"
+
+model:
+    type: "ODE" # Can be an "SDE" or "ReactionSystem"
+    states: ["A", "B"]
+
+equations:
+    A: |
+      0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+            (alpha_2 * (B^nx2) / (kx2^nx2 + B^nx2) + beta_2) - 0.02 * r1 * A
+
+    B: | 
+      0.02 * (alpha_3 * (B^nx2) / (kx3^nx2 + B^nx2) + beta_3) *
+            (alpha_4 / (1 + (A / kr)^nr) + beta_4) - 0.1 * r2 * B
+
+simulation:
+    tspan: [0.0, 10.0]
+    solver: "Rosenbrock23"
+
+# Parameters (provided values in the orgininal RPA work)
+parameters:
+  alpha_1:
+    value: 83.4743
+    role: design
+    bounds: [10.0, 200.0] # TODO bounds? 
+
+  alpha_2:
+    value: 391.1627
+    role: design
+    bounds: [10.0, 400.0] # TODO bounds?
+
+  alpha_3:
+    value: 17.7437
+    role: design
+    bounds: [10.0, 200.0] # TODO bounds?
+
+  alpha_4:
+    value: 8.7519e6
+    role: design
+    bounds: [10.0, 200000000.0] # TODO bounds?
+
+  beta_1:
+    value: 11.9586
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 15.0 # TODO bounds?
+
+  beta_2:
+    value: 3.9e-4
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1.0
+
+  beta_3:
+    value: 0.6644
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 10.0 # TODO bounds?
+
+  beta_4:
+    value: 7.1347
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 10.0 # TODO bounds?
+
+  kx1:
+    value: 1.28e-8
+    role: fixed
+
+  nx1:
+    value: 2.34
+    role: fixed
+
+  kcymRtot:
+    value: 2.60e3
+    role: fixed
+
+  kx2:
+    value: 36.4063
+    role: fixed
+
+  nx2:
+    value: 1.3
+    role: fixed
+
+  kr:
+    value: 0.51
+    role: fixed
+
+  nr:
+    value: 3.2
+    role: fixed
+
+  r1:
+    value: 89.0635
+    role: fixed
+
+  r2:
+    value: 7.0188
+    role: fixed
+
+  kx3:
+    value: 4006.9
+    role: fixed
+  
+  cuma:
+    value: 2.0e-6
+    role: fixed
+
+inputs:
+    type: "step"
+    t_threshold: 50
+    values: [1,10]
+   
