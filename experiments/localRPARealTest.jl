@@ -22,7 +22,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model_from_yaml("./test/test-data/RPA_real_og.yml")
+RPA_model = load_model_from_yaml("./test/test-data/RPA_real_opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
