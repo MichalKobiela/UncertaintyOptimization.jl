@@ -41,8 +41,8 @@ tspan = (0.0, 10.0)
         
 # Run simulation
 sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
-# sol = simulate!(model, sol[:,end], Dict(:cuma => 2e-5,), tspan)
-# sol = simulate!(model, sol[:,end], Dict(:cuma => 0.001,), tspan)
+sol = simulate!(model, sol[:,end], Dict(:cuma => 2e-5,), tspan)
+sol = simulate!(model, sol[:,end], Dict(:cuma => 0.001,), tspan)
 
 Plots.plot(sol)
 
