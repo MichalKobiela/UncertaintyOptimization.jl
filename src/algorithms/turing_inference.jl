@@ -3,9 +3,9 @@ using Distributions
 using DynamicPPL
 
 
-function run_inference(model::Model, spec::BayesianSpec)
+function run_inference(model::Model, spec::TuringSpec)
 
-    println("Running Bayesian Inference...")
+    println("Running Turing Inference...")
 
     # 1. Set up the model
     setup_model_for_inference(model, spec)

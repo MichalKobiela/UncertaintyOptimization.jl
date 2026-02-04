@@ -21,12 +21,12 @@ Fields common to all algorithms
 
 abstract type InferenceSpec end
 
-# =========================================================================
-# BAYESIAN SPEC: BAYESIAN-specific settings
+# =================================s========================================
+# TURING SPEC: TURING-specific settings
 # =========================================================================
 
 """
-        BayesianSpec
+        TuringSpec
 Uses all fields from InferenceSpec, plus:
 
 - `noise_prior::Distribution`: Prior for observation noise
@@ -39,7 +39,7 @@ Uses all fields from InferenceSpec, plus:
 
  Example
 ```julia
-spec = BayesianSpec(
+spec = TuringSpec(
     data = observations,
     t_obs = times,
     obs_state_idx = 1,
@@ -53,7 +53,7 @@ spec = BayesianSpec(
 ```
 """
 
-struct BayesianSpec <: InferenceSpec
+struct TuringSpec <: InferenceSpec
     # Common fields
     data::Vector{Float64}
     t_obs::Vector{Float64}
@@ -72,7 +72,7 @@ struct BayesianSpec <: InferenceSpec
     dt::Float64
     
     # Constructor with defaults
-    function BayesianSpec(;
+    function TuringSpec(;
                       data::Vector{Float64},
                       t_obs::Vector{Float64},
                       obs_state_idx::Int=1,

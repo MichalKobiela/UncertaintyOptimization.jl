@@ -21,14 +21,14 @@ Random.seed!(0);
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPA/Inference/mcmc.jl
 
     
-    In the original inference procedure for the RPA model it performs Bayesian parameter inference for an ODE model. 
+    In the original inference procedure for the RPA model it performs Turing parameter inference for an ODE model. 
         
     First, it takes some initial conditions, ground truth parameters and an ODEProblem to solve the system and compute 
     some trajectories saving them to sol_true.csv. 
     
     Next, the script then creates noisy observations to simulate experimental data with meausurement noise and saves to data_true.csv. 
     
-    A Bayesian hierarchical model is then defined with priors for a subset of parameters that they want to treat as uncertain. 
+    A turing Bayesian hierarchical model is then defined with priors for a subset of parameters that they want to treat as uncertain. 
     Monte Carlo sampling is run to create posterior samples. 
     
     In the subsequent script then randomly selects 1,000 samples from the posterior and saves to posterior_samples.csv.
@@ -72,7 +72,7 @@ randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_ob
 data = convert(Array, randomized)
 
  # Run inference
- spec = BayesianSpec(
+ spec = TuringSpec(
       data = data,
       t_obs = t_obs,
       obs_state_idx = 1,
