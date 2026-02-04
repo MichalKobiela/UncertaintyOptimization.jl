@@ -46,28 +46,28 @@ sol = simulate!(model, sol[:,end], Dict(:cuma => 0.001,), tspan)
 
 Plots.plot(sol)
 
-# CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
+CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
 
-# # Generate noisy observations
-# t_obs = collect(range(1, stop = 90, length = 30)) 
-# randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
-# data = convert(Array, randomized)
+df = CSV.read(string(@__DIR__)*"/data.csv", DataFrame)
+data = Matrix(df)
+background_fluorescence = 17.6
+data = data .- background_fluorescence
 
  # Run inference
-#  spec = BayesianSpec(
-#       data = data,
-#       t_obs = t_obs,
-#       obs_state_idx = 1,
-#       initial_conditions = [1.0, 1.0],
-#       tspan = (0.0, 100.0),
-#       uncertain_param_values = params,
-#       noise_prior = InverseGamma(2,3),
-#       sampler = NUTS(0.65),
-#       n_samples = 1000,
-#       n_chains = 3,
-#       solver = Euler(),
-#       dt = 0.01
-#   )
+spec = BayesianSpec(
+    data = data,
+    t_obs = t_obs,
+    obs_state_idx = 1,
+    initial_conditions = [1.0, 1.0],
+    tspan = (0.0, 100.0),
+    uncertain_param_values = params,
+    noise_prior = InverseGamma(2,3),
+    sampler = NUTS(0.65),
+    n_samples = 1000,
+    n_chains = 3,
+    solver = Euler(),
+    dt = 0.01
+)
 
 #  @time chain = run_inference(model, spec)
 
