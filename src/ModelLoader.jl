@@ -21,7 +21,8 @@ struct ParameterSpec
     name::String # paramater name
     symbol::Any # parameter symbolic
     role:: Symbol # whether :fixed, :uncertain, :design
-    value:: Union{Nothing, Float64} # value of the paramater if provided
+    value:: Union{Nothing, Float64, Tuple{Vararg{Float64}}} # value of the paramater if provided
+    warmup_value:: Union{Nothing, Float64, Tuple{Float64}} # value of the paramater if provided
     bounds::Union{Nothing, Tuple{Float64,Float64}} # bounds for the parameter if provided
     prior:: Union{Nothing, Dict}
 end
@@ -135,9 +136,15 @@ function build_symbolics(config::Dict)
         param = create_param(pname_str)   # create MTK parameter
         role = Symbol(pinfo["role"])
         value = get(pinfo, "value", nothing)
+        warmup_value = get(pinfo, "warmup_value", nothing)
         bounds = haskey(pinfo, "bounds") ? tuple(pinfo["bounds"]...) : nothing
         prior = get(pinfo, "prior", nothing)
-        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, bounds, prior)
+        
+        # if a tuple are detected, convert to a tuple
+        value = value isa AbstractVector ? tuple(value...) : value
+        warmup_value = warmup_value isa AbstractVector ? tuple(warmup_value...) : warmup_value
+
+        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior)
     end
 
     # Makes an input signal defined by the YAML
