@@ -14,6 +14,9 @@ using CSV, Tables
 using Plots
 using DataFrames
 
+sampling_size = 1000
+# debug
+sampling_size = 50
 
 Random.seed!(0);
 
@@ -87,11 +90,40 @@ data = convert(Array, randomized)
       dt = 0.01
   )
 
- @time chain = run_inference(model, spec)
+@time chain = run_inference(model, spec)
 
-
-posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
+betas = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
+posterior_samples = sample(chain[betas], sampling_size; replace=false)
 samples = Array(posterior_samples)
+
+
+# Test if posterior draws distribution recovers the ground truth values
+function ci_contains_truth(chain, p::Symbol, truth::Real; level=0.95)
+    α = 1 - level
+    posterior_draws = vec(Array(chain[p]))                 
+    lo, hi = quantile(posterior_draws, (α/2, 1-α/2))        
+    μ = mean(posterior_draws)
+    return (param=p, mean=μ, lo=lo, hi=hi, truth=Float64(truth), in_CI=(lo <= truth <= hi))
+end
+
+truths = [params[beta] for beta in betas]
+rows = ci_contains_truth.(Ref(chain), betas, truths; level=0.95)
+
+for row in rows
+    println("Result: $(row)")
+end
+
+# samp = Array(chain[:beta_AB])              # size: (niter, nchains, 1) or similar
+# v = vec(samp)                            # flatten all draws
+
+# ci = quantile(v, (0.025, 0.975))         # (lower, upper)
+
+# beta_true = params[:beta_AB]                       # example
+# in_ci = (ci[1] <= beta_true <= ci[2])
+# println("beta_AB is in the ci, $(in_ci)")
+
+
+
 
 # -------------Compare to the previous data-----------------------------------
 
