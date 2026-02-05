@@ -237,7 +237,7 @@ from a YAML file.
 
 """
 
-function load_model_from_yaml(filename::String)
+function load_model(filename::String)
 
     config = load_YAML(filename)
     validate_YAML(config)

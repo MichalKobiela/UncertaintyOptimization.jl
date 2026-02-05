@@ -22,7 +22,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model_from_yaml("./test/test-data/RPA_real_opt.yml")
+RPA_model = load_model("./test/test-data/RPA_real_opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
@@ -40,34 +40,34 @@ params = Dict(
 tspan = (0.0, 10.0)
         
 # Run simulation
-sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
-sol = simulate!(model, sol[:,end], Dict(:cuma => 2e-5,), tspan)
-sol = simulate!(model, sol[:,end], Dict(:cuma => 0.001,), tspan)
+# sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
+# sol = simulate!(model, sol[:,end], Dict(:cuma => 2e-5,), tspan)
+# sol = simulate!(model, sol[:,end], Dict(:cuma => 0.001,), tspan)
 
-Plots.plot(sol)
+# Plots.plot(sol)
 
-CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
+# CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
 
-df = CSV.read(string(@__DIR__)*"/data.csv", DataFrame)
-data = Matrix(df)
-background_fluorescence = 17.6
-data = data .- background_fluorescence
+# df = CSV.read(string(@__DIR__)*"/data.csv", DataFrame)
+# data = Matrix(df)
+# background_fluorescence = 17.6
+# data = data .- background_fluorescence
 
- # Run inference
-spec = BayesianSpec(
-    data = data,
-    t_obs = t_obs,
-    obs_state_idx = 1,
-    initial_conditions = [1.0, 1.0],
-    tspan = (0.0, 100.0),
-    uncertain_param_values = params,
-    noise_prior = InverseGamma(2,3),
-    sampler = NUTS(0.65),
-    n_samples = 1000,
-    n_chains = 3,
-    solver = Euler(),
-    dt = 0.01
-)
+# # Run inference
+# spec = TuringSpec(
+#     data = data,
+#     t_obs = t_obs,
+#     obs_state_idx = 1,
+#     initial_conditions = (24.0, 350.0),
+#     tspan = (0.0, 10.0),
+#     # uncertain_param_values = params,
+#     noise_prior = InverseGamma(2,3),
+#     sampler = NUTS(0.65),
+#     n_samples = 1000,
+#     n_chains = 3,
+#     solver = Euler(),
+#     dt = 0.01
+# )
 
 #  @time chain = run_inference(model, spec)
 

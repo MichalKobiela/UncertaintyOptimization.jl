@@ -162,5 +162,5 @@ parameters:
 inputs:
     type: "step"
     t_threshold: 50
-    values: [1,10]
+    values: [1, 10]
    

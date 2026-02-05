@@ -31,7 +31,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
     
     Next, the script then creates noisy observations to simulate experimental data with meausurement noise and saves to data_true.csv. 
     
-    A turing Bayesian hierarchical model is then defined with priors for a subset of parameters that they want to treat as uncertain. 
+    A Bayesian hierarchical model is then defined with priors for a subset of parameters that they want to treat as uncertain. 
     Monte Carlo sampling is run to create posterior samples. 
     
     In the subsequent script then randomly selects 1,000 samples from the posterior and saves to posterior_samples.csv.
@@ -44,7 +44,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model_from_yaml("./test/test-data/test_RPA.yml")
+RPA_model = load_model("./test/test-data/test_RPA.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
@@ -74,21 +74,21 @@ t_obs = collect(range(1, stop = 90, length = 30))
 randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_obs)])
 data = convert(Array, randomized)
 
- # Run inference
- spec = TuringSpec(
-      data = data,
-      t_obs = t_obs,
-      obs_state_idx = 1,
-      initial_conditions = [1.0, 1.0],
-      tspan = (0.0, 100.0),
-      uncertain_param_values = params,
-      noise_prior = InverseGamma(2,3),
-      sampler = NUTS(0.65),
-      n_samples = 1000,
-      n_chains = 3,
-      solver = Euler(),
-      dt = 0.01
-  )
+# Run inference
+spec = TuringSpec(
+    data = data,
+    t_obs = t_obs,
+    obs_state_idx = 1,
+    initial_conditions = [1.0, 1.0],
+    tspan = (0.0, 100.0),
+    uncertain_param_values = params,
+    noise_prior = InverseGamma(2,3),
+    sampler = NUTS(0.65),
+    n_samples = sampling_size,
+    n_chains = 3,
+    solver = Euler(),
+    dt = 0.01
+)
 
 @time chain = run_inference(model, spec)
 
