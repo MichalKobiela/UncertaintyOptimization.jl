@@ -85,6 +85,8 @@ end
 # Simulators
 # -------------------------------------------------------------------------
 
+
+
 """
 Simulate
 
@@ -120,28 +122,22 @@ SHOULD NOT MAKE ALTER THE MODEL!
 
 function simulate!(model::Model, 
                    initial_conditions::Vector{Float64},
-                   parameters::Any,
+                   parameters::Dict,
                    tspan::Tuple{Float64, Float64};
                    solver=Rosenbrock23(),
                    dt::Float64=0.01,
                    saveat=Float64[])
     
-    # If we have states [A ,B] and initial conditions [1.0, 1.0]
-    # this creates Dict(A=> 1.0, and B=> 1.0)
-    u0 = Dict(unknowns(model.sys) .=> initial_conditions)
-    p_map = Dict(p.symbol => p.value for p in values(model.model_def.parameters) if p.value !== nothing)
-    # Merge them all together - here user defined params will override existing
-    all_params = merge(u0, p_map)
-
-    #println(parameters)
-    # Currently supports ODE but can add a contiditional here based on what the
-    # user specifies
-    prob = ODEProblem(model.sys, all_params, tspan)
+    setup_simulation!(model, 
+                    initial_conditions, 
+                    parameters, 
+                    tspan, 
+                    solver=solver, 
+                    dt=dt)
 
     # Solve the Problem
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
-
     if isempty(saveat)
         sol = solve(prob, solver; p=parameters, dt=dt)
     else
@@ -150,6 +146,7 @@ function simulate!(model::Model,
 
     return sol
 end
+
 
 """
 Prepares the model for simulation, created onced for many evaluations.
@@ -165,13 +162,14 @@ Prepares the model for simulation, created onced for many evaluations.
 """
 
 function setup_simulation!(model::Model,
-                          t_obs::Vector{Float64},
-                          obs_state_idx::Int,
                           initial_conditions::Vector{Float64},
-                          uncertain_param_values::Dict,
+                          uncertain_param_values::Any,
                           tspan::Tuple{Float64, Float64};
-                          solver=Euler(),
-                          dt::Float64=0.01)
+                          solver::Any=Euler(),
+                          dt::Float64=0.01,
+                          t_obs::Union{Vector{Float64}, Nothing}=nothing,
+                          obs_state_idx::Union{Int, Nothing}=nothing,
+                          )
     
     # Get states from the compiled system
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)

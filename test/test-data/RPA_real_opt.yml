@@ -155,8 +155,8 @@ parameters:
     role: fixed
   
   cuma:
-    value: [2e-5, 0.0001, 0.001]
     warmup_value: 2e-6
+    value: [2e-5, 0.0001, 0.001]
     role: fixed
 
 inputs:

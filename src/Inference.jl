@@ -24,13 +24,13 @@ function setup_model_for_inference(model::Model, spec::InferenceSpec)
     # Setup model simulation
      setup_simulation!(
         model,
-        spec.t_obs,                 
-        spec.obs_state_idx,         
         spec.initial_conditions,    
-        spec.uncertain_param_values,          
+        spec.uncertain_param_values,
         spec.tspan;                 
         solver = spec.solver,       
-        dt= spec.dt            
+        dt= spec.dt,
+        spec.t_obs,                 
+        spec.obs_state_idx,         
     )
     
     return nothing
