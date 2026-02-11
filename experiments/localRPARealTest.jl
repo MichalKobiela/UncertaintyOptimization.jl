@@ -50,6 +50,7 @@ sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
 # sol = simulate!(model, sol[:, end], Dict(:cuma => 2e-5,), tspan)
 # sol = simulate!(model, sol[:, end], Dict(:cuma => 0.001,), tspan)
 
+
 # Plots.plot(sol)
 
 # CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))

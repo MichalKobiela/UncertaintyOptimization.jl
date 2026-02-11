@@ -1,6 +1,4 @@
 /Manifest*.toml
 /docs/Manifest*.toml
 /docs/build/
-/experiments/
-/test/test-data/
 /.vscode/
