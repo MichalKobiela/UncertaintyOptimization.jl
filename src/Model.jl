@@ -139,9 +139,9 @@ function simulate!(model::Model,
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
     if isempty(saveat)
-        sol = solve(prob, solver; p=parameters, dt=dt)
+        sol = solve(model.prob, solver; p=parameters, dt=dt)
     else
-        sol = solve(prob, solver; p=parameters, dt=dt, saveat=saveat)
+        sol = solve(model.prob, solver; p=parameters, dt=dt, saveat=saveat)
     end
 
     return sol
@@ -187,12 +187,11 @@ function setup_simulation!(model::Model,
         if param_spec.role == :uncertain
             push!(uncertain_param_names, name)
         end
+    end
 
-        # Now check if the user has provided new values
-        for (param_name, param_value) in uncertain_param_values
-            p_map[param_name] = param_value
-        end
-
+    # Now check if the user has provided new values
+    for (param_name, param_value) in uncertain_param_values
+        p_map[param_name] = param_value
     end
 
     # This creates the dictionary that MTK needs to build the problem
@@ -211,7 +210,6 @@ function setup_simulation!(model::Model,
 
     model.param_setter = setp(model.sys, uncertain_syms)
 
-
     model.buffer_func = (p) -> remake_buffer(
         model.sys, model.prob.p, Dict(zip(uncertain_syms, p))
     )
@@ -222,7 +220,7 @@ function setup_simulation!(model::Model,
         solver = solver,
         dt = dt)
 
-    println("Ready for inference...")
+    println("Model built and compiled...")
 
 
     return nothing
