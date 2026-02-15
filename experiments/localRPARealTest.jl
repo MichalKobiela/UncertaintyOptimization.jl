@@ -42,13 +42,12 @@ tspan = (0.0, 10.0)
 # Run simulation
 # fixme this is already a warmup defined in the yml file
 sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
-sol = simulate!(model, sol[:, end], Dict(:cuma => 1000 * 1e-6), tspan)
+# sol = simulate!(model, sol[:, end], Dict(:cuma => 1000 * 1e-6), tspan)
 
 # these runs are already defined so they will be included, let's just get all the results, 
 # fixme this means we have to return multiple solutions here
 # sol = simulate!(model, sol[:, end], Dict(:cuma => 2e-5,), tspan)
 # sol = simulate!(model, sol[:, end], Dict(:cuma => 0.001,), tspan)
-
 
 Plots.plot(sol)
 

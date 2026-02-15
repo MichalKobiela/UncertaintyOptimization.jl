@@ -20,8 +20,10 @@ Provides methods for simulation, parameter manipulation, and result visualisatio
 mutable struct Model
     model_def::ModelDefinition
     sys:: Any # Compiled ModellingToolkit system
-    prob::Union{Nothing, ODEProblem} #ODE supported first
+    prob::Union{Nothing, ODEProblem, Function} #ODE supported first
     sol::Union{Nothing, Any} # solution of the LAST simulation
+
+    warmup::Bool
 
     # fields for inference procedure
     param_setter:: Union{Nothing, Any}
@@ -31,8 +33,12 @@ mutable struct Model
 
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
+        # does warmup exist
+        warmup_params = get_warmup_params(model_def.parameters)
+        warmup = !isempty(warmup_params)
+
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing, nothing, nothing, nothing, nothing)
+        new(model_def, sys, nothing, nothing, warmup, nothing, nothing, nothing, nothing)
 
     end
 end
@@ -54,6 +60,35 @@ function get_uncertain_parameters(model::Model)
         end
     end
     return uncertain
+end
+
+function get_warmup_params(parameters::Dict{Symbol, ParameterSpec})
+    # check for a warm up stage, and start with warm up values
+    warmup_map = Dict{Symbol, Float64}()
+    for kv in pairs(parameters)
+        if !isnothing(kv.second.warmup_value)
+            warmup_map[kv.first] = kv.second.warmup_value
+        end
+    end
+
+    return warmup_map
+end
+
+function get_array_params(parameters::Dict{Symbol, ParameterSpec})::Dict{Symbol, Tuple{Vararg{Float64}}}
+    multiparams = Dict{Symbol, Tuple{Vararg{Float64}}}()
+    for kv in pairs(parameters)
+        if kv.second.value isa Union{AbstractArray, Tuple}
+            multiparams[kv.first] = kv.second.value
+        end
+    end
+
+    # check that all array params have the same length
+    lengths = [length(v) for v in values(multiparams)]
+    if length(unique(lengths)) > 1
+        error("Parameters have value arrays which differ in length. The lengths are", lengths)
+    end
+
+    multiparams
 end
 
 # -------------------------------------------------------------------------
@@ -135,13 +170,56 @@ function simulate!(model::Model,
                     solver=solver, 
                     dt=dt)
 
-    # Solve the Problem
+    println("model created?", model.warmup)
+
+    u0 = initial_conditions
+
+    if model.warmup
+        # initial params are the warm up params
+        sol = solve(model.prob, solver; dt=dt)
+
+        # 
+        u0 = sol.u[end]
+        remake(model.prob; u0=u0)
+        # TODO add this point you have to 
+        # ensure that the normal parameters
+        # are used and not the warmup
+        # the issue is that if it's an array, then you need 3 runs
+        # which also could mean 3 separate copies 
+        # if they are to run in parallel
+    end
+
+    # check how many runs
+    # walk over all parameters and check their lengths
+
+    # prepare parameters
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
-    if isempty(saveat)
-        sol = solve(model.prob, solver; p=parameters, dt=dt)
-    else
-        sol = solve(model.prob, solver; p=parameters, dt=dt, saveat=saveat)
+    opts = (p=parameters, dt=dt)
+    opts = isempty(saveat) ? opts : merge(opts, (saveat=saveat))
+
+    # Solve the Problem
+    sol = solve(model.prob, solver; opts...)
+
+    multiparams = get_array_params(model.model_def.parameters)
+
+    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
+
+    opts_prod = (dt=dt, )
+    opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
+
+    for i in 1:param_len
+        # prepare the parameters for the next run
+        params = (u0 = u0, )
+        for (k, v) in multiparams
+            println("kv pure", k, v)
+            println("")
+            # params = merge(params, (;(Symbol(k) => v[i])...))
+        end
+        
+        println("Prod ", i, " ", params)
+        prob_i = remake(model.prob; params...)
+        results[i] = solve(prob_i, solver; opts_prod...)
     end
 
     return sol
@@ -178,14 +256,26 @@ function setup_simulation!(model::Model,
     p_map = Dict{Symbol, Float64}()
     uncertain_param_names = []
 
+    warmup_map = get_warmup_params(model.model_def.parameters)
+    if !isempty(warmup_map)
+        println("Warm up parameters present. Using initial warmup values. ")
+    end
+
     # For all uncertain parameters in the model_definition
     for(name, param_spec) in model.model_def.parameters
-        if param_spec.value !== nothing
-            p_map[name] = param_spec.value
-        end
-
         if param_spec.role == :uncertain
             push!(uncertain_param_names, name)
+        end
+        
+        val = param_spec.value
+
+        # if it is an array we skip this parameter as it will be set later
+        if val isa AbstractArray || val isa Tuple
+            continue
+        end
+        
+        if val !== nothing
+            p_map[name] = val
         end
     end
 
@@ -195,7 +285,7 @@ function setup_simulation!(model::Model,
     end
 
     # This creates the dictionary that MTK needs to build the problem
-    all_params = merge(u0, p_map)
+    all_params = merge(u0, p_map, warmup_map)
     
     # Create the problem with all parameters and their starting values - including user provided ones
     model.prob = ODEProblem(model.sys, all_params, tspan)
