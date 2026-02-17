@@ -157,8 +157,8 @@ SHOULD NOT MAKE ALTER THE MODEL!
 
 function simulate!(model::Model, 
                    initial_conditions::Vector{Float64},
-                   parameters::Dict,
                    tspan::Tuple{Float64, Float64};
+                   parameters::Dict=Dict{Symbol,Float64}(),
                    solver=Rosenbrock23(),
                    dt::Float64=0.01,
                    saveat=Float64[])
@@ -208,21 +208,31 @@ function simulate!(model::Model,
     opts_prod = (dt=dt, )
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
 
+    # results = Vector{Float64}(undef, param_len) 
+    results = Vector{Any}(undef, 3)
     for i in 1:param_len
         # prepare the parameters for the next run
         params = (u0 = u0, )
         for (k, v) in multiparams
             println("kv pure", k, v)
-            println("")
             # params = merge(params, (;(Symbol(k) => v[i])...))
+            
+            println("")
         end
+
+        println("next p", multiparams[i])
         
         println("Prod ", i, " ", params)
         prob_i = remake(model.prob; params...)
-        results[i] = solve(prob_i, solver; opts_prod...)
+        #
+        sol = solve(prob_i, solver; opts_prod...)
+        # extract the first column
+        # note this is baked in rn
+        results[i] = sol[1,:]
+        # println("results", results)
     end
 
-    return sol
+    return results
 end
 
 

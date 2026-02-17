@@ -41,7 +41,7 @@ tspan = (0.0, 10.0)
         
 # Run simulation
 # fixme this is already a warmup defined in the yml file
-sol = simulate!(model, init_cond, Dict(:cuma => 2e-6,), tspan)
+sol = simulate!(model, init_cond, tspan)
 # sol = simulate!(model, sol[:, end], Dict(:cuma => 1000 * 1e-6), tspan)
 
 # these runs are already defined so they will be included, let's just get all the results, 
