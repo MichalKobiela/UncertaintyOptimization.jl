@@ -197,7 +197,7 @@ function simulate!(model::Model,
     opts_prod = (dt=dt, )
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
 
-    results = Vector{Vector{Float64}}()
+    results = Vector{SciMLBase.ODESolution}()
     for i in 1:param_len
         # prepare the parameters for the next run
         p_symbol_dict = Dict()
@@ -210,13 +210,13 @@ function simulate!(model::Model,
         @info "Production run"
         sol = solve(prob_i, solver; opts_prod...)
         
-        p = Plots.plot(sol)
-        display(p)
+        # p = Plots.plot(sol)
+        # display(p)
 
-        push!(results, sol.u[end])
+        push!(results, sol)
     end
 
-    return hcat(results...)
+    return results
 end
 
 
@@ -252,7 +252,7 @@ function setup_simulation!(model::Model,
 
     warmup_map = get_warmup_params(model.model_def.parameters)
     if !isempty(warmup_map)
-        println("Warm up parameters present. Using initial warmup values. ")
+        @info "Warm up parameters present. Using initial warmup values. "
     end
 
     # For all uncertain parameters in the model_definition
@@ -309,7 +309,7 @@ function setup_simulation!(model::Model,
         solver = solver,
         dt = dt)
 
-    println("Model built and compiled...")
+    @info "Model built and compiled..."
 
 
     return nothing
