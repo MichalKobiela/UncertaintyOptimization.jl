@@ -22,7 +22,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model("./test/test-data/RPA_real_opt.yml")
+RPA_model = load_model("./test/test-data/RPA_real/RPA_real_opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
@@ -47,33 +47,30 @@ for sol in sols
     display(p)
 end
 
-# Plots.plot(sol)
-
 # CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
 
-# df = CSV.read(string(@__DIR__)*"/data.csv", DataFrame)
-# data = Matrix(df)
-# background_fluorescence = 17.6
-# data = data .- background_fluorescence
+time = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", DataFrame))
+data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", DataFrame))
+background_fluorescence = 17.6
+data = data .- background_fluorescence
 
-# # Run inference
-# spec = TuringSpec(
-#     data = data,
-#     t_obs = t_obs,
-#     obs_state_idx = 1,
-#     initial_conditions = (24.0, 350.0),
-#     tspan = (0.0, 10.0),
-#     # uncertain_param_values = params,
-#     noise_prior = InverseGamma(2,3),
-#     sampler = NUTS(0.65),
-#     n_samples = 1000,
-#     n_chains = 3,
-#     solver = Euler(),
-#     dt = 0.01
-# )
+# Run inference
+spec = TuringSpec(
+    data = data,
+    t_obs = t_obs,
+    obs_state_idx = 1,
+    initial_conditions = (24.0, 350.0),
+    tspan = (0.0, 10.0),
+    # uncertain_param_values = params,
+    noise_prior = InverseGamma(2,3),
+    sampler = NUTS(0.65),
+    n_samples = 10,
+    n_chains = 3,
+    solver = Euler(),
+    dt = 0.01
+)
 
-#  @time chain = run_inference(model, spec)
-
+@time chain = run_inference(model, spec)
 
 # posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
 # samples = Array(posterior_samples)
