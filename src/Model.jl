@@ -3,6 +3,7 @@ using OrdinaryDiffEq
 using SymbolicIndexingInterface
 using SciMLStructures: Tunable, canonicalize, replace, replace!
 using PreallocationTools
+using Plots
 """
 Model
 
@@ -169,70 +170,53 @@ function simulate!(model::Model,
                     tspan, 
                     solver=solver, 
                     dt=dt)
-
-    println("model created?", model.warmup)
-
     u0 = initial_conditions
 
     if model.warmup
+        @info "Running warmup"
+
         # initial params are the warm up params
         sol = solve(model.prob, solver; dt=dt)
 
-        # 
-        u0 = sol.u[end]
-        remake(model.prob; u0=u0)
-        # TODO add this point you have to 
-        # ensure that the normal parameters
-        # are used and not the warmup
-        # the issue is that if it's an array, then you need 3 runs
-        # which also could mean 3 separate copies 
-        # if they are to run in parallel
+        p = Plots.plot(sol)
+        display(p)
+
+        # overwrite u0 for production run
+        u0 = copy(sol.u[end])
     end
 
-    # check how many runs
-    # walk over all parameters and check their lengths
-
     # prepare parameters
+    opts = (p=parameters, dt=dt)
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
-    opts = (p=parameters, dt=dt)
     opts = isempty(saveat) ? opts : merge(opts, (saveat=saveat))
 
-    # Solve the Problem
-    sol = solve(model.prob, solver; opts...)
-
     multiparams = get_array_params(model.model_def.parameters)
-
     param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
 
     opts_prod = (dt=dt, )
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
 
-    # results = Vector{Float64}(undef, param_len) 
-    results = Vector{Any}(undef, 3)
+    results = Vector{Vector{Float64}}()
     for i in 1:param_len
         # prepare the parameters for the next run
-        params = (u0 = u0, )
+        p_symbol_dict = Dict()
         for (k, v) in multiparams
-            println("kv pure", k, v)
-            # params = merge(params, (;(Symbol(k) => v[i])...))
-            
-            println("")
+            p_symbol_dict[k] = v[i]
         end
 
-        println("next p", multiparams[i])
-        
-        println("Prod ", i, " ", params)
-        prob_i = remake(model.prob; params...)
-        #
+        prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
+
+        @info "Production run"
         sol = solve(prob_i, solver; opts_prod...)
-        # extract the first column
-        # note this is baked in rn
-        results[i] = sol[1,:]
-        # println("results", results)
+        
+        p = Plots.plot(sol)
+        display(p)
+
+        push!(results, sol.u[end])
     end
 
-    return results
+    return hcat(results...)
 end
 
 
@@ -295,10 +279,15 @@ function setup_simulation!(model::Model,
     end
 
     # This creates the dictionary that MTK needs to build the problem
-    all_params = merge(u0, p_map, warmup_map)
-    
+    params = merge(p_map, warmup_map)
+
+    p_map_vars = Dict(
+        getproperty(model.sys, name) => val
+        for (name, val) in params
+    )
+
     # Create the problem with all parameters and their starting values - including user provided ones
-    model.prob = ODEProblem(model.sys, all_params, tspan)
+    model.prob = ODEProblem(model.sys, merge(u0, p_map_vars), tspan)
     
     uncertain_syms = Vector{Any}(undef, length(uncertain_param_names))
 
