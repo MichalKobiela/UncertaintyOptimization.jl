@@ -55,10 +55,10 @@ spec = TuringSpec(
 
 struct TuringSpec <: InferenceSpec
     # Common fields
-    data::Vector{Float64}
+    data::Union{Vector{Float64}, Matrix{Float64}}
     t_obs::Vector{Float64}
     obs_state_idx::Int
-    initial_conditions::Vector{Float64}
+    initial_conditions::Tuple{Vararg{Number}}
     tspan::Tuple{Float64, Float64}
     uncertain_param_values::Dict
 
@@ -73,10 +73,10 @@ struct TuringSpec <: InferenceSpec
     
     # Constructor with defaults
     function TuringSpec(;
-                      data::Vector{Float64},
+                      data::Union{Vector{Float64}, Matrix{Float64}},
                       t_obs::Vector{Float64},
                       obs_state_idx::Int=1,
-                      initial_conditions::Vector{Float64},
+                      initial_conditions::Tuple{Vararg{Number}},
                       tspan::Tuple{Float64, Float64},
                       uncertain_param_values::Dict=Dict(),
                       noise_prior::Distribution=InverseGamma(2, 3),
@@ -88,9 +88,7 @@ struct TuringSpec <: InferenceSpec
                       dt::Float64=0.01)
         
         # Validation
-        if length(data) != length(t_obs)
-            error("❌ Data and time vectors must have same length")
-        end
+        size(data,1) == size(t_obs,1) || throw(DimensionMismatch("❌ Data $(size(data)) and time $(size(t_obs)) vectors must have same length"))
         
         if n_samples < 1
             error("❌ n_samples must be positive")
