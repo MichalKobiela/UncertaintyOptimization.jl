@@ -88,7 +88,9 @@ struct TuringSpec <: InferenceSpec
                       dt::Float64=0.01)
         
         # Validation
-        size(data,1) == size(t_obs,1) || throw(DimensionMismatch("❌ Data $(size(data)) and time $(size(t_obs)) vectors must have same length"))
+        if size(data,1) != size(t_obs,1)
+            throw(DimensionMismatch("❌ Data $(size(data)) and time $(size(t_obs)) vectors must have same length"))
+        end
         
         if n_samples < 1
             error("❌ n_samples must be positive")

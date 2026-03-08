@@ -26,38 +26,32 @@ RPA_model = load_model("./test/test-data/RPA_real/RPA_real_opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
-
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
 init_cond = [24.0, 350.0] # Initial values for y1 and y2
-
-# Ground truth values (must match original)
-params = Dict(
-    :cuma => 2e-6,
-)
-  
 tspan = (0.0, 10.0)
         
 # Run simulation
-# fixme this is already a warmup defined in the yml file
-sols = simulate!(model, init_cond, tspan)
-for sol in sols
-    p = Plots.plot(sol)
-    display(p)
-end
+# sols = simulate!(model, init_cond, tspan)
+# for sol in sols
+#     p = Plots.plot(sol)
+#     display(p)
+# end
 
 # CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
 
-time = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", DataFrame))
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", DataFrame))
+data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
+        DataFrame))
+time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
+        DataFrame)[!,1]
 background_fluorescence = 17.6
 data = data .- background_fluorescence
 
 # Run inference
 spec = TuringSpec(
     data = data,
-    t_obs = t_obs,
+    t_obs = time,
     obs_state_idx = 1,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),

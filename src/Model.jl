@@ -164,14 +164,17 @@ function simulate!(model::Model,
                    dt::Float64=0.01,
                    saveat=Float64[])
     
-    setup_simulation!(model, 
-                    initial_conditions, 
-                    parameters, 
-                    tspan, 
-                    solver=solver, 
-                    dt=dt)
-    u0 = initial_conditions
+    # build the problem once
+    if isnothing(model.prob)
+        setup_simulation!(model, 
+                        initial_conditions, 
+                        parameters, 
+                        tspan, 
+                        solver=solver, 
+                        dt=dt)
+    end
 
+    u0 = initial_conditions
     if model.warmup
         @info "Running warmup"
 
@@ -234,7 +237,7 @@ Prepares the model for simulation, created onced for many evaluations.
 """
 
 function setup_simulation!(model::Model,
-                          initial_conditions::Vector{Float64},
+                          initial_conditions::Tuple{Vararg{Float64}},
                           uncertain_param_values::Any,
                           tspan::Tuple{Float64, Float64};
                           solver::Any=Euler(),
