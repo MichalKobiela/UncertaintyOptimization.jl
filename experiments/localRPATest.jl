@@ -65,7 +65,7 @@ params = Dict(
 tspan = (0.0, 100.0)
         
 # Run simulation
-sol = simulate!(model, init_cond, params, tspan)
+# sol = simulate!(model, init_cond, params, tspan)
 
 CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
 

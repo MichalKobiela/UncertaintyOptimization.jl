@@ -10,19 +10,13 @@ function run_inference(model::Model, spec::TuringSpec)
     # 1. Set up the model
     setup_model_for_inference(model, spec)
     priors = make_priors(model)
-    data = spec.data
-    prob = model.prob
-    setter = model.param_setter
-    buffer_fcn = model.buffer_func
-    noise_prior = spec.noise_prior
-    uncertain_params = model.uncertain_params
     # In the test RPA the order the parameters come out from the MTK system is
     # not the same order as what the user puts in. This can lead to come confusion
     # when writing to a file but the buffer function and setter doe not need a specific value it 
     # goes by name.
-    param_symbols = [ModelingToolkit.getname(p) for p in uncertain_params]
+    param_symbols = [ModelingToolkit.getname(p) for p in model.uncertain_params]
     # 2. Build turing model
-    fit_fcn = fit(data, prob,  param_symbols, buffer_fcn, setter, priors, noise_prior, spec)
+    fit_fcn = fit(model, spec, param_symbols, priors)
     #fit_fcn = optim_model()
     
     # 3. Run sampling
@@ -36,8 +30,6 @@ function run_inference(model::Model, spec::TuringSpec)
     )
     
     return chain
-    
-
 end
 
 # -------------------------------------------------------------------------
@@ -81,32 +73,43 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
+@model function fit(model, spec, param_symbols, priors)
     
-    @model function fit(data, prob,  param_symbols, buffer_fcn, param_setter, priors, noise_prior, spec)
-        
-        σ ~ noise_prior
-        
-        param_values = []
-        for sym in param_symbols
-            val ~ NamedDist(priors[sym], @varname($sym))
-            push!(param_values, val)
-        end
-        
-        p_vec = convert(Vector{eltype(param_values)}, param_values)
- 
-        # Each MCMC iteration creates its own parameter buffer
-        # This is thread-safe because new_p is local to this call
-        new_p = buffer_fcn(p_vec)
-        param_setter(new_p, p_vec)
-        prob_tmp = remake(prob; p=new_p)
-        
-        # Solve with the local problem
-        predicted = Array(solve(prob_tmp, spec.solver; 
-                               dt=spec.dt, 
-                               saveat=spec.t_obs, 
-                               save_idxs=spec.obs_state_idx))
-        
-        data ~ MvNormal(predicted, σ^2 * I(length(data)))
-        
+    drawn_params = Dict()
+    for sym in param_symbols
+        val ~ NamedDist(priors[sym], sym)
+        drawn_params[sym] = val
     end
+
+    sols = simulate!(model, spec.initial_conditions, spec.tspan;
+        solver=spec.solver, 
+        dt=spec.dt, 
+        saveat=spec.t_obs, 
+        # inference
+        parameters = drawn_params,
+        )
+
+    # this was called before, 
+    # "which state variables to save"
+    # save_idxs=spec.obs_state_idx)
+
+    # TODO - generalise choosing how to extract the states
+    # predicted = vec(vcat(sol[1,:] for sol in sols))
+    predicted = vcat(sols[1][1,:], sols[2][1,:], sols[3][1,:])
+
+    data = spec.data
+
+    # TODO overall ideally we'd find a different way to check 
+    # if size(predicted, 1) != size(data, 1)
+    #     return nothing
+    # end
+
+    σ ~ spec.noise_prior
+    
+    try
+        return data ~ MvNormal(predicted, σ^2 * I)
+    catch TaskFailedException
+        Turing.@addlogprob! -1e10  # reject bad bad samples
+    end
+end
     

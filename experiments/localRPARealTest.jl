@@ -40,31 +40,36 @@ tspan = (0.0, 10.0)
 # end
 
 # CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
-
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
-        DataFrame))
 time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
         DataFrame)[!,1]
+data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
+        DataFrame))
 background_fluorescence = 17.6
 data = data .- background_fluorescence
+# select specific modelled data
+data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 # Run inference
 spec = TuringSpec(
-    data = data,
+    data = data_subset,
     t_obs = time,
     obs_state_idx = 1,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
-    sampler = NUTS(0.65),
-    n_samples = 10,
+    sampler = NUTS(0.65, init_ϵ = 0.001),
+    n_samples = 3000,
     n_chains = 3,
     solver = Euler(),
     dt = 0.01
 )
 
 @time chain = run_inference(model, spec)
+
+f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
+serialize(f, chain)
+close(f)
 
 # posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
 # samples = Array(posterior_samples)

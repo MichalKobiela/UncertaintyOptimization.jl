@@ -157,12 +157,14 @@ SHOULD NOT MAKE ALTER THE MODEL!
 
 
 function simulate!(model::Model, 
-                   initial_conditions::Vector{Float64},
+                   initial_conditions::Tuple{Vararg{Float64}},
                    tspan::Tuple{Float64, Float64};
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver=Rosenbrock23(),
                    dt::Float64=0.01,
-                   saveat=Float64[])
+                   saveat=Float64[],
+                   # for inference
+                   )
     
     # build the problem once
     if isnothing(model.prob)
@@ -174,25 +176,35 @@ function simulate!(model::Model,
                         dt=dt)
     end
 
+    prob = model.prob
+
+    # draw the parameters that are uncertain
+    if !isempty(parameters)
+        prob = remake(prob; p=parameters)
+    end
+
     u0 = initial_conditions
     if model.warmup
-        @info "Running warmup"
+        # @info "Running warmup"
 
         # initial params are the warm up params
-        sol = solve(model.prob, solver; dt=dt)
+        sol = solve(prob, solver; dt=dt)
 
-        p = Plots.plot(sol)
-        display(p)
+        # p = Plots.plot(sol)
+        # display(p)
 
         # overwrite u0 for production run
         u0 = copy(sol.u[end])
     end
 
     # prepare parameters
-    opts = (p=parameters, dt=dt)
+    opts = (dt=dt, )
     # If saveat is empty, use dt as the save interval
     # Otherwise use the specific time points provided
-    opts = isempty(saveat) ? opts : merge(opts, (saveat=saveat))
+
+    if isempty(saveat)
+         opts = merge(opts, (saveat=saveat, ))
+    end
 
     multiparams = get_array_params(model.model_def.parameters)
     param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
@@ -210,7 +222,7 @@ function simulate!(model::Model,
 
         prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
 
-        @info "Production run"
+        # @info "Production run"
         sol = solve(prob_i, solver; opts_prod...)
         
         # p = Plots.plot(sol)
