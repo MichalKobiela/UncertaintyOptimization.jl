@@ -10,14 +10,21 @@ function run_inference(model::Model, spec::TuringSpec)
 
     # 1. Set up the model
     setup_model_for_inference(model, spec)
-    priors = make_priors(model)
+
     # In the test RPA the order the parameters come out from the MTK system is
     # not the same order as what the user puts in. This can lead to come confusion
     # when writing to a file but the buffer function and setter doe not need a specific value it 
     # goes by name.
     param_symbols = [ModelingToolkit.getname(p) for p in model.uncertain_params]
+
+    priors = make_priors(model)
+
+    # optimisation
+    prior_vec = map(s -> priors[s], param_symbols)              # same order as param_symbols
+
+    
     # 2. Build turing model
-    fit_fcn = fit(model, spec, param_symbols, priors)
+    fit_fcn = fit(model, spec, prior_vec)
     #fit_fcn = optim_model()
 
     Turing.setprogress!(true)
@@ -78,14 +85,17 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
-@model function fit(model, spec, param_symbols, priors)
+@model function fit(model, spec, prior_vec)
 
     σ ~ spec.noise_prior
-    
-    drawn_params = Dict()
-    for sym in param_symbols
-        val ~ NamedDist(priors[sym], sym)
-        drawn_params[sym] = val
+
+    # draw params into a vector
+    N = length(prior_vec)
+
+    drawn_params = TArray{Float64}(undef, N)   # AD-friendly array in Turing models
+
+    @inbounds for i in 1:N
+        drawn_params[i] ~ prior_vec[i]         # names become p[1], p[2], ...
     end
 
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
@@ -95,11 +105,10 @@ end
         saveat=spec.t_obs, 
         # inference
         solver_opts = spec.solver_opts,
-        save_idxs=spec.obs_state_idx
         )
 
 
-    # treat non-successful terminations / NaNs as impossible
+    # also treat non-successful terminations / NaNs as impossible
     if !successful_retcode(sols[end].retcode) || any(!isfinite, Array(sols[end]))
         Turing.@addlogprob!(-Inf)
         return
