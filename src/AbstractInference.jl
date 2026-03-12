@@ -69,7 +69,8 @@ struct TuringSpec <: InferenceSpec
     n_chains::Int
     sampling_method::Any
     solver::Any
-    dt::Float64
+
+    solver_opts::NamedTuple
     
     # Constructor with defaults
     function TuringSpec(;
@@ -85,12 +86,14 @@ struct TuringSpec <: InferenceSpec
                       n_chains::Int=3,
                       sampling_method=MCMCThreads(),
                       solver=Euler(),
-                      dt::Float64=0.01)
+                    #   dt::Float64=nothing,
+                      solver_opts::NamedTuple=NamedTuple(),
+                      )
         
-        # Validation
-        if size(data,1) != size(t_obs,1)
-            throw(DimensionMismatch("❌ Data $(size(data)) and time $(size(t_obs)) vectors must have same length"))
-        end
+        # Validation TODO
+        # if size(data,1) != size(t_obs,1)
+        #     throw(DimensionMismatch("❌ Data $(size(data)) and time $(size(t_obs)) vectors must have same length"))
+        # end
         
         if n_samples < 1
             error("❌ n_samples must be positive")
@@ -98,6 +101,6 @@ struct TuringSpec <: InferenceSpec
         
         new(data, t_obs, obs_state_idx, initial_conditions, tspan,
             uncertain_param_values, noise_prior, sampler, n_samples, n_chains,
-            sampling_method, solver, dt)
+            sampling_method, solver, solver_opts)
     end
 end

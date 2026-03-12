@@ -159,13 +159,16 @@ SHOULD NOT MAKE ALTER THE MODEL!
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
                    tspan::Tuple{Float64, Float64};
+
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver=Rosenbrock23(),
-                   dt::Float64=0.01,
+                #    dt::Float64=nothing,
                    saveat=Float64[],
-                   # for inference
+                   # solve kwargs
+                   solver_opts::NamedTuple = NamedTuple(),
+                   save_idxs=nothing,
                    )
-    
+
     # build the problem once
     if isnothing(model.prob)
         setup_simulation!(model, 
@@ -173,44 +176,32 @@ function simulate!(model::Model,
                         parameters, 
                         tspan, 
                         solver=solver, 
-                        dt=dt)
+                        solver_opts=solver_opts)
     end
 
     prob = model.prob
 
-    # draw the parameters that are uncertain
+    # update the parameters as requested
     if !isempty(parameters)
         prob = remake(prob; p=parameters)
     end
 
     u0 = initial_conditions
     if model.warmup
-        # @info "Running warmup"
-
         # initial params are the warm up params
-        sol = solve(prob, solver; dt=dt)
-
-        # p = Plots.plot(sol)
-        # display(p)
+        sol = solve(prob, solver; solver_opts...)
 
         # overwrite u0 for production run
-        u0 = copy(sol.u[end])
+        u0 = sol.u[end]
     end
 
     # prepare parameters
-    opts = (dt=dt, )
-    # If saveat is empty, use dt as the save interval
-    # Otherwise use the specific time points provided
-
-    if isempty(saveat)
-         opts = merge(opts, (saveat=saveat, ))
-    end
-
     multiparams = get_array_params(model.model_def.parameters)
     param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
 
-    opts_prod = (dt=dt, )
+    opts_prod = solver_opts
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
+    opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
     results = Vector{SciMLBase.ODESolution}()
     for i in 1:param_len
@@ -222,12 +213,8 @@ function simulate!(model::Model,
 
         prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
 
-        # @info "Production run"
         sol = solve(prob_i, solver; opts_prod...)
         
-        # p = Plots.plot(sol)
-        # display(p)
-
         push!(results, sol)
     end
 
@@ -253,7 +240,7 @@ function setup_simulation!(model::Model,
                           uncertain_param_values::Any,
                           tspan::Tuple{Float64, Float64};
                           solver::Any=Euler(),
-                          dt::Float64=0.01,
+                          solver_opts::NamedTuple=NamedTuple(),
                           t_obs::Union{Vector{Float64}, Nothing}=nothing,
                           obs_state_idx::Union{Int, Nothing}=nothing,
                           )
@@ -322,7 +309,7 @@ function setup_simulation!(model::Model,
         t_obs = t_obs,
         obs_state_idx = obs_state_idx,
         solver = solver,
-        dt = dt)
+        solver_opts = solver_opts)
 
     @info "Model built and compiled..."
 

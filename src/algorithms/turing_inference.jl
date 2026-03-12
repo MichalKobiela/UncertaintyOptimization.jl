@@ -1,6 +1,7 @@
 using Turing
 using Distributions
 using DynamicPPL
+using SciMLBase: successful_retcode
 
 
 function run_inference(model::Model, spec::TuringSpec)
@@ -18,6 +19,10 @@ function run_inference(model::Model, spec::TuringSpec)
     # 2. Build turing model
     fit_fcn = fit(model, spec, param_symbols, priors)
     #fit_fcn = optim_model()
+
+    Turing.setprogress!(true)
+
+    @show spec
     
     # 3. Run sampling
     chain = sample(
@@ -74,6 +79,8 @@ end
 - Builds likelihood from spec
 """
 @model function fit(model, spec, param_symbols, priors)
+
+    σ ~ spec.noise_prior
     
     drawn_params = Dict()
     for sym in param_symbols
@@ -82,12 +89,21 @@ end
     end
 
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
+        parameters = drawn_params,
         solver=spec.solver, 
-        dt=spec.dt, 
+        # dt=spec.dt, 
         saveat=spec.t_obs, 
         # inference
-        parameters = drawn_params,
+        solver_opts = spec.solver_opts,
+        save_idxs=spec.obs_state_idx
         )
+
+
+    # treat non-successful terminations / NaNs as impossible
+    if !successful_retcode(sols[end].retcode) || any(!isfinite, Array(sols[end]))
+        Turing.@addlogprob!(-Inf)
+        return
+    end
 
     # this was called before, 
     # "which state variables to save"
@@ -98,18 +114,7 @@ end
     predicted = vcat(sols[1][1,:], sols[2][1,:], sols[3][1,:])
 
     data = spec.data
-
-    # TODO overall ideally we'd find a different way to check 
-    # if size(predicted, 1) != size(data, 1)
-    #     return nothing
-    # end
-
-    σ ~ spec.noise_prior
     
-    try
-        return data ~ MvNormal(predicted, σ^2 * I)
-    catch TaskFailedException
-        Turing.@addlogprob! -1e10  # reject bad bad samples
-    end
+    data ~ MvNormal(predicted, σ^2 * I)
 end
     

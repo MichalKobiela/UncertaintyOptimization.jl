@@ -13,6 +13,9 @@ using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
+using BenchmarkTools
+using Profile
+using ProfileView
 
 
 Random.seed!(0);
@@ -29,7 +32,7 @@ RPA_model = load_model("./test/test-data/RPA_real/RPA_real_opt.yml")
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
-init_cond = [24.0, 350.0] # Initial values for y1 and y2
+init_cond = (24.0, 350.0) # Initial values for y1 and y2
 tspan = (0.0, 10.0)
         
 # Run simulation
@@ -59,13 +62,16 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65, init_ϵ = 0.001),
-    n_samples = 3000,
-    n_chains = 3,
-    solver = Euler(),
-    dt = 0.01
+    n_samples = 100,
+    n_chains = 1,
+    solver = Rosenbrock23(),
+    solver_opts = (dtmin=1e-12, ),
 )
 
-@time chain = run_inference(model, spec)
+
+Profile.clear()
+@profile chain = run_inference(model, spec)
+ProfileView.view()
 
 f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
 serialize(f, chain)

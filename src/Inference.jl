@@ -28,7 +28,7 @@ function setup_model_for_inference(model::Model, spec::InferenceSpec)
         spec.uncertain_param_values,
         spec.tspan;                 
         solver = spec.solver,       
-        dt= spec.dt,
+        solver_opts = spec.solver_opts,
         spec.t_obs,                 
         spec.obs_state_idx,         
     )
