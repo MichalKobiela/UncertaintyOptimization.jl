@@ -19,6 +19,7 @@ The aim of this module is to be responsible for reading in a YAML and creating t
 # Currently immutable but we can make them mutable if required later
 struct ParameterSpec
     name::String # paramater name
+    # TODO - why is symbol Any? 
     symbol::Any # parameter symbolic
     role:: Symbol # whether :fixed, :uncertain, :design
     value:: Union{Nothing, Float64, Tuple{Vararg{Float64}}} # value of the paramater if provided

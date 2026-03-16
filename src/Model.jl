@@ -19,27 +19,39 @@ Provides methods for simulation, parameter manipulation, and result visualisatio
 # -------------------------------------------------------------------------
 
 mutable struct Model
+    # TODO: extarct the MTK specific building blocks into their own sub-struct. 
+
     model_def::ModelDefinition
     sys:: Any # Compiled ModellingToolkit system
     prob::Union{Nothing, ODEProblem, Function} #ODE supported first
-    sol::Union{Nothing, Any} # solution of the LAST simulation
+    sol::Any # solution of the LAST simulation
 
-    warmup::Bool
+    warmup_params::Union{Nothing, Dict{Symbol, Float64}}
+    warmup_settable:: Union{Nothing, Vector{Pair{Int32, Float64}}}
+    # TODO - add "ordered" ie order matters
+    multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
 
     # fields for inference procedure
-    param_setter:: Union{Nothing, Any}
-    buffer_func::Union{Nothing, Function}
-    uncertain_params::Union{Nothing, Vector}
+    param_setter!:: Any
+    # TODO - write that this is ordered, and settable
+    uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
+    p_vec::Any
+    # TODO - explain that this is the look up table for the p container copy
+    settable_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
     simulation_context::Union{Nothing, NamedTuple}
 
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
         # does warmup exist
         warmup_params = get_warmup_params(model_def.parameters)
-        warmup = !isempty(warmup_params)
+        warmup = isempty(warmup_params) ? nothing :  warmup_params
+        
+        # TODO - ideally it be taken care of at the parsing stage
+        multiparams = get_array_params(model_def.parameters)
 
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing, warmup, nothing, nothing, nothing, nothing)
+        new(model_def, sys, nothing, nothing, warmup, nothing, multiparams, 
+        nothing, nothing, nothing, nothing, nothing)
 
     end
 end
@@ -63,7 +75,7 @@ function get_uncertain_parameters(model::Model)
     return uncertain
 end
 
-function get_warmup_params(parameters::Dict{Symbol, ParameterSpec})
+function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}):: Dict{Symbol, Float64}
     # check for a warm up stage, and start with warm up values
     warmup_map = Dict{Symbol, Float64}()
     for kv in pairs(parameters)
@@ -105,7 +117,7 @@ function evaluate_model(model::Model, p_vec)
 
     new_p = model.buffer_func(p_vec)
     
-    model.param_setter(new_p, p_vec)
+    model.param_setter!(new_p, p_vec)
 
     prob_new = remake(model.prob; p=new_p)
 
@@ -159,7 +171,6 @@ SHOULD NOT MAKE ALTER THE MODEL!
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
                    tspan::Tuple{Float64, Float64};
-
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver=Rosenbrock23(),
                 #    dt::Float64=nothing,
@@ -167,6 +178,7 @@ function simulate!(model::Model,
                    # solve kwargs
                    solver_opts::NamedTuple = NamedTuple(),
                    save_idxs=nothing,
+                   sampled_uncertain_params=Any,
                    )
 
     # build the problem once
@@ -181,13 +193,24 @@ function simulate!(model::Model,
 
     prob = model.prob
 
-    # update the parameters as requested
-    if !isempty(parameters)
-        prob = remake(prob; p=parameters)
+    # TODO - do you still need params? a dictionary kind of special slow case with a warning?
+
+    @show sampled_uncertain_params
+
+    # copy here in order to avoid losing the types
+    p_vec = copy(model.prob.p)
+
+    # update the uncertain parameters with the drawn samples
+    if !isempty(sampled_uncertain_params)
+        # the these parameters form the first part of the p_vec be design
+        model.param_setter!(p_vec, sampled_uncertain_params)
     end
 
     u0 = initial_conditions
-    if model.warmup
+    if !isnothing(model.warmup_settable)
+        # TODO
+        # manually update the warmup
+
         # initial params are the warm up params
         sol = solve(prob, solver; solver_opts...)
 
@@ -196,7 +219,9 @@ function simulate!(model::Model,
     end
 
     # prepare parameters
-    multiparams = get_array_params(model.model_def.parameters)
+    
+    # all multiparams have to be the same length, TODO - check if when parsing initially
+    multiparams = model.multiparams
     param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
 
     opts_prod = solver_opts
@@ -211,9 +236,9 @@ function simulate!(model::Model,
             p_symbol_dict[k] = v[i]
         end
 
-        prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
+        # prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
 
-        sol = solve(prob_i, solver; opts_prod...)
+        sol = solve(prob, solver; u0=u0, p=p_vec, opts_prod...)
         
         push!(results, sol)
     end
@@ -250,7 +275,7 @@ function setup_simulation!(model::Model,
     # Get all the parameters and their values as pairs for input into the problem - like mtk expects
     # BUT ovveride with new starting values if they have been provided
     p_map = Dict{Symbol, Float64}()
-    uncertain_param_names = []
+    uncertain_param_symbols = Vector{Symbol}()
 
     warmup_map = get_warmup_params(model.model_def.parameters)
     if !isempty(warmup_map)
@@ -260,7 +285,7 @@ function setup_simulation!(model::Model,
     # For all uncertain parameters in the model_definition
     for(name, param_spec) in model.model_def.parameters
         if param_spec.role == :uncertain
-            push!(uncertain_param_names, name)
+            push!(uncertain_param_symbols, name)
         end
         
         val = param_spec.value
@@ -291,19 +316,57 @@ function setup_simulation!(model::Model,
     # Create the problem with all parameters and their starting values - including user provided ones
     model.prob = ODEProblem(model.sys, merge(u0, p_map_vars), tspan)
     
-    uncertain_syms = Vector{Any}(undef, length(uncertain_param_names))
-
-    for (i, name) in enumerate(uncertain_param_names)
-        uncertain_syms[i] = getproperty(model.sys, name)
+    # TODO - switch to a vector of symbols?
+    uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
+    for (i, name) in enumerate(uncertain_param_symbols)
+        uncertain_Nums[i] = getproperty(model.sys, name)
     end
 
-    model.uncertain_params =  uncertain_syms
+    model.uncertain_param_symbols =  Tuple(uncertain_param_symbols)
 
-    model.param_setter = setp(model.sys, uncertain_syms)
+    # prepare the symbols for multiparams
+    multiparams_Nums = Vector{Num}(undef, length(model.multiparams))
+    for (i, symbol) in enumerate(keys(model.multiparams))
+        multiparams_Nums[i] = getproperty(model.sys, symbol)
+    end
 
-    model.buffer_func = (p) -> remake_buffer(
-        model.sys, model.prob.p, Dict(zip(uncertain_syms, p))
-    )
+    # this the array which will allow us to understand where the settable symbols are in the p container copy
+    settable_symbols = (uncertain_param_symbols..., keys(model.multiparams)...)
+    @show settable_symbols
+
+    # settable parameters: uncertain..., multiparam...
+    settable_params = Tuple([uncertain_Nums; multiparams_Nums])
+
+    # accounting for warm-up variables is a bit more tricky
+    # TODO - implement other cases
+    # I will start with our simple case where the warm up
+    # already exists in one of the settable params
+    # TODO - add test cases for warm up parameters not being in multiparams
+
+    # TODO - for now, store which parameters have the warmup, and how they have to be updated, 
+    # so a warmup is a tuple [index, value] but it refers reall yto the index in ordered settable prop.p copy container
+    
+    # TODO - finding warmup ideally is done after being set in model struct
+    warmup_settable = Vector{Pair{Int32, Float64}}(undef, length(warmup_map))
+    for (i, (warmup_symbol, warmup_value)) in enumerate(warmup_map)
+        warmup_index = findfirst(==(warmup_symbol), settable_symbols)
+        push!(warmup_settable, warmup_index => warmup_value)
+        if !(warmup_symbol in settable_symbols)
+            # TODO account for this case
+            error("the warmup parameters is not in settable params")
+        end
+    end
+    model.warmup_settable = warmup_settable
+    
+
+    model.param_setter! = setp(model.sys, settable_params)
+
+    model.p_vec = copy(model.prob.p)
+    model.settable_symbols = settable_symbols
+
+    # model.buffer_func = (p) -> remake_buffer(
+    #     model.sys, model.prob.p, Dict(zip(uncertain_syms, p))
+    # )
     
     model.simulation_context = (
         t_obs = t_obs,

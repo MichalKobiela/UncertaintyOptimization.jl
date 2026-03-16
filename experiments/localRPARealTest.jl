@@ -62,16 +62,17 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65, init_ϵ = 0.001),
-    n_samples = 100,
+    n_samples = 25,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, ),
 )
 
 
-Profile.clear()
-@profile chain = run_inference(model, spec)
-ProfileView.view()
+# Profile.clear()
+# @profile 
+chain = run_inference(model, spec)
+# ProfileView.view()
 
 f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
 serialize(f, chain)

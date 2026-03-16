@@ -1,5 +1,6 @@
 using Turing
 using Distributions
+using DistributionsAD
 using DynamicPPL
 using SciMLBase: successful_retcode
 
@@ -15,16 +16,17 @@ function run_inference(model::Model, spec::TuringSpec)
     # not the same order as what the user puts in. This can lead to come confusion
     # when writing to a file but the buffer function and setter doe not need a specific value it 
     # goes by name.
-    param_symbols = [ModelingToolkit.getname(p) for p in model.uncertain_params]
+    
+    # TODO
+    # multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
+    # uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
+    # settable_params::Union{Nothing, Tuple{Vararg{Num}}}
 
+    # prepare priors for the uncertain parameters
     priors = make_priors(model)
-
-    # optimisation
-    prior_vec = map(s -> priors[s], param_symbols)              # same order as param_symbols
-
     
     # 2. Build turing model
-    fit_fcn = fit(model, spec, prior_vec)
+    fit_fcn = fit(model, spec, priors)
     #fit_fcn = optim_model()
 
     Turing.setprogress!(true)
@@ -61,16 +63,22 @@ function make_prior(prior::Dict)
 end
 
 # helper to build all priors for all uncertain params
-function make_priors(model::Model)
-    priors = Dict{Symbol, Distribution}()
+function make_priors(model::Model)::Tuple{Vararg{Distribution}}
+    priors = Vector{Distribution}(undef, length(model.uncertain_param_symbols))
 
-    for (name, ps) in model.model_def.parameters
-        if ps.role == :uncertain
-            priors[name] = make_prior(ps.prior)
+    for (i, symbol) in enumerate(model.uncertain_param_symbols)
+        for (param_symbol, param_spec) in model.model_def.parameters
+            if param_symbol == symbol
+                if param_spec.role != :uncertain
+                    error("A found uncertain parameter $symbol is not uncertain")
+                end
+
+                priors[i] = make_prior(param_spec.prior)
+            end
         end
     end
 
-    return priors
+    return Tuple(priors)
 end
 
 # -------------------------------------------------------------------------
@@ -85,26 +93,33 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
-@model function fit(model, spec, prior_vec)
+@model function fit(model, spec, uncertain_priors)
 
     σ ~ spec.noise_prior
 
     # draw params into a vector
-    N = length(prior_vec)
+    # the problem is that you have to draw only the uncertain params
+    # while we have to fill other params the right way
+    # so this complicates the architecture, 
+    # we could chain them together and do this part by part, with drawing at the end? 
+    
 
-    drawn_params = TArray{Float64}(undef, N)   # AD-friendly array in Turing models
-
-    @inbounds for i in 1:N
-        drawn_params[i] ~ prior_vec[i]         # names become p[1], p[2], ...
-    end
+    # ntoe that some params are drawn, but some are set with the multiparameters, 
+    # but the multiparameter ones have to happen in the simulate()
+    # so maybe we can first set uncertain params, 
+    # and the rest of symbols we can set with multiparam
+     
+    # TODO - consider using TArray{Float64} in order to have an explicit type (AD-friendly?)
+    uncertain_sampled_values ~ arraydist(collect(uncertain_priors))    
 
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
-        parameters = drawn_params,
+        # parameters = drawn_params,
         solver=spec.solver, 
         # dt=spec.dt, 
         saveat=spec.t_obs, 
         # inference
         solver_opts = spec.solver_opts,
+        sampled_uncertain_params = uncertain_sampled_values,
         )
 
 
