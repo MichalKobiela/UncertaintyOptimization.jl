@@ -61,7 +61,7 @@ spec = TuringSpec(
     tspan = (0.0, 10.0),
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
-    sampler = MH(), # NUTS(0.65, init_ϵ = 0.001),
+    sampler = NUTS(0.65, init_ϵ = 0.001), # MH()
     n_samples = 1,
     n_chains = 1,
     solver = Rosenbrock23(),

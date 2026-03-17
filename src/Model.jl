@@ -33,6 +33,7 @@ mutable struct Model
     warmup_settable:: Union{Nothing, Vector{Pair{Int32, Float64}}}
     # TODO - add "ordered" ie order matters
     multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
+    multiparam_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
 
     # fields for inference procedure
     param_setter!:: Any
@@ -54,7 +55,8 @@ mutable struct Model
         multiparams = get_array_params(model_def.parameters)
 
         #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing, warmup, nothing, multiparams, 
+        new(model_def, sys, nothing, nothing, warmup, nothing, 
+        multiparams, nothing,
         nothing, nothing, nothing, nothing, nothing, nothing)
 
     end
@@ -208,12 +210,12 @@ function simulate!(model::Model,
     # update the uncertain parameters with the drawn samples
     if !isempty(sampled_uncertain_params)
         # the these parameters form the first part of the p_vec be design
-        model.param_setter!(p_work, sampled_uncertain_params)
+        # model.param_setter!(p_work, sampled_uncertain_params)
     end
 
     if !isnothing(model.warmup_settable)
-        # TODO
-        # manually update the warmup
+        # apply the inference parameters
+        model.param_setter!(p_work, sampled_uncertain_params)
 
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts...)
@@ -232,11 +234,7 @@ function simulate!(model::Model,
         u0_setter!(p_work[2], u0)
     end
 
-    # @show sampled_uncertain_params
-    @show p_work
-
     # prepare parameters
-    
     # all multiparams have to be the same length, TODO - check if when parsing initially
     multiparams = model.multiparams
     param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
@@ -245,13 +243,18 @@ function simulate!(model::Model,
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
+    multiparam_values = Vector{Float64}(undef, param_len)
+
     results = Vector{SciMLBase.ODESolution}()
     for i in 1:param_len
-        # prepare the parameters for the next run
-        p_symbol_dict = Dict()
-        for (k, v) in multiparams
-            p_symbol_dict[k] = v[i]
+        # prepare the parameters for the next run        
+        for (j, symbol) in enumerate(model.multiparam_symbols)
+            multiparam_values[j] = multiparams[symbol][i]
         end
+
+        # apply the inference parameters + multiparams
+        # TODO - optimisation of merge here, this could be a standard array in model that we keep updating by index
+        model.param_setter!(p_work, [sampled_uncertain_params; multiparam_values])
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
@@ -344,15 +347,19 @@ function setup_simulation!(model::Model,
 
     # prepare the symbols for multiparams
     multiparams_Nums = Vector{Num}(undef, length(model.multiparams))
-    for (i, symbol) in enumerate(keys(model.multiparams))
+    # TODO note that order matters
+    multiparam_symbols = Tuple(collect(keys(model.multiparams)))
+    for (i, symbol) in enumerate(multiparam_symbols)
         multiparams_Nums[i] = getproperty(model.sys, symbol)
     end
 
     # this the array which will allow us to understand where the settable symbols are in the p container copy
-    settable_symbols = (uncertain_param_symbols..., keys(model.multiparams)...)
+    settable_symbols = (uncertain_param_symbols..., multiparam_symbols...)
 
     # settable parameters: uncertain..., multiparam...
     settable_params = Tuple([uncertain_Nums; multiparams_Nums])
+
+    model.multiparam_symbols = multiparam_symbols
 
     # accounting for warm-up variables is a bit more tricky
     # TODO - implement other cases
