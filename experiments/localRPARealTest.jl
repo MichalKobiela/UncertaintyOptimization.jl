@@ -56,13 +56,13 @@ data_subset = vcat(data[:,2], data[:,5], data[:,9])
 spec = TuringSpec(
     data = data_subset,
     t_obs = time,
-    obs_state_idx = 1,
+#     obs_state_idx = nothing,# 1,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
-    sampler = NUTS(0.65, init_ϵ = 0.001),
-    n_samples = 25,
+    sampler = MH(), # NUTS(0.65, init_ϵ = 0.001),
+    n_samples = 1,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, ),
@@ -72,11 +72,11 @@ spec = TuringSpec(
 # Profile.clear()
 # @profile 
 chain = run_inference(model, spec)
-# ProfileView.view()
+# # ProfileView.view()
 
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
-serialize(f, chain)
-close(f)
+# f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
+# serialize(f, chain)
+# close(f)
 
 # posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
 # samples = Array(posterior_samples)

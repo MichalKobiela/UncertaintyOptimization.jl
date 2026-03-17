@@ -17,6 +17,9 @@ Provides methods for simulation, parameter manipulation, and result visualisatio
 # -------------------------------------------------------------------------
 # Struct Definitions
 # -------------------------------------------------------------------------
+mutable struct TunableP{T}
+    tunable_parameters::T
+end
 
 mutable struct Model
     # TODO: extarct the MTK specific building blocks into their own sub-struct. 
@@ -36,7 +39,7 @@ mutable struct Model
     # TODO - write that this is ordered, and settable
     uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
     p_vec::Any
-    tunable_pflat::Any
+    tunable_pflat::Union{Nothing, TunableP}
     # TODO - explain that this is the look up table for the p container copy
     settable_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
     simulation_context::Union{Nothing, NamedTuple}
@@ -196,14 +199,11 @@ function simulate!(model::Model,
 
     # TODO - do you still need params? a dictionary kind of special slow case with a warning?
 
-    # @show sampled_uncertain_params
-
     # copy here in order to avoid losing the types
     # TODO cleanup? 
 
-    # @show eltype(sampled_uncertain_params)
     T = eltype(sampled_uncertain_params)
-    p_work = replace(Tunable(), model.prob.p, T.(model.tunable_pflat))
+    p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
 
     # update the uncertain parameters with the drawn samples
     if !isempty(sampled_uncertain_params)
@@ -222,6 +222,9 @@ function simulate!(model::Model,
         # overwrite u0 for production run
         u0 = sol.u[end]
     end
+
+    @show sampled_uncertain_params
+    @show p_work
 
     # prepare parameters
     
@@ -244,6 +247,9 @@ function simulate!(model::Model,
         # prob_i = remake(model.prob, u0=u0, p=p_symbol_dict)
 
         sol = solve(prob, solver; u0=u0, p=p_work, opts_prod...)
+
+        p = Plots.plot(sol, ylims=(0,1000))
+        display(p)
         
         push!(results, sol)
     end
@@ -319,7 +325,7 @@ function setup_simulation!(model::Model,
     )
 
     # Create the problem with all parameters and their starting values - including user provided ones
-    model.prob = ODEProblem(model.sys, u0, tspan, p_map_vars)
+    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan)
     
     # TODO - switch to a vector of symbols?
     uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
@@ -337,7 +343,6 @@ function setup_simulation!(model::Model,
 
     # this the array which will allow us to understand where the settable symbols are in the p container copy
     settable_symbols = (uncertain_param_symbols..., keys(model.multiparams)...)
-    @show settable_symbols
 
     # settable parameters: uncertain..., multiparam...
     settable_params = Tuple([uncertain_Nums; multiparams_Nums])
@@ -362,7 +367,6 @@ function setup_simulation!(model::Model,
         end
     end
     model.warmup_settable = warmup_settable
-    
 
     model.param_setter! = setp(model.sys, settable_params)
 
@@ -370,7 +374,7 @@ function setup_simulation!(model::Model,
 
     # tunable p container
     tunable_pflat, _, _ = canonicalize(Tunable(), model.prob.p)
-    model.tunable_pflat = tunable_pflat
+    model.tunable_pflat = TunableP(tunable_pflat)
 
     model.settable_symbols = settable_symbols
 

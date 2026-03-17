@@ -30,8 +30,6 @@ function run_inference(model::Model, spec::TuringSpec)
     #fit_fcn = optim_model()
 
     Turing.setprogress!(true)
-
-    @show spec
     
     # 3. Run sampling
     chain = sample(
