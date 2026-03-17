@@ -4,6 +4,8 @@ using SymbolicIndexingInterface
 using SciMLStructures: Tunable, canonicalize, replace, replace!
 using PreallocationTools
 using Plots
+using ForwardDiff
+
 """
 Model
 
@@ -173,6 +175,10 @@ SHOULD NOT MAKE ALTER THE MODEL!
 """
 
 
+# helpers
+undual(x) = x
+undual(x::ForwardDiff.Dual) = ForwardDiff.value(x)
+
 
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
@@ -203,8 +209,17 @@ function simulate!(model::Model,
 
     # copy here in order to avoid losing the types
     # TODO cleanup? 
+    # prepare parameters
+    # all multiparams have to be the same length, TODO - check if when parsing initially
+    multiparams = model.multiparams
+    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
+    multiparam_values = Vector{Float64}(undef, param_len)
 
-    T = eltype(sampled_uncertain_params)
+    # TODO - set the multiparam values to the defaults
+
+    all_updatable_params = [sampled_uncertain_params; multiparam_values]
+
+    T = eltype(all_updatable_params)
     p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
 
     # update the uncertain parameters with the drawn samples
@@ -220,8 +235,8 @@ function simulate!(model::Model,
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts...)
 
-        p = Plots.plot(sol, ylims=(0,1000))
-        display(p)
+        # p = Plots.plot(sol, ylims=(0,1000))
+        # display(p)
 
         # set u0 for production run
         u0 = sol.u[end]
@@ -231,19 +246,15 @@ function simulate!(model::Model,
         states = unknowns(model.sys)
         u0_setter! = setu(model.sys, states)
         # directly work on the unknowns in the tunable p
-        u0_setter!(p_work[2], u0)
+        u0_float = undual.(u0)
+        u0_setter!(p_work[2], u0_float)
     end
 
-    # prepare parameters
-    # all multiparams have to be the same length, TODO - check if when parsing initially
-    multiparams = model.multiparams
-    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
+    
 
     opts_prod = solver_opts
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
-
-    multiparam_values = Vector{Float64}(undef, param_len)
 
     results = Vector{SciMLBase.ODESolution}()
     for i in 1:param_len
@@ -258,8 +269,8 @@ function simulate!(model::Model,
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
-        p = Plots.plot(sol, ylims=(0,1000))
-        display(p)
+        # p = Plots.plot(sol, ylims=(0,1000))
+        # display(p)
         
         push!(results, sol)
     end
