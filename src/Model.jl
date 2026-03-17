@@ -211,7 +211,6 @@ function simulate!(model::Model,
         model.param_setter!(p_work, sampled_uncertain_params)
     end
 
-    u0 = initial_conditions
     if !isnothing(model.warmup_settable)
         # TODO
         # manually update the warmup
@@ -219,14 +218,21 @@ function simulate!(model::Model,
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts...)
 
-        # p = Plots.plot(sol, ylims=(0,1000))
-        # display(p)
+        p = Plots.plot(sol, ylims=(0,1000))
+        display(p)
 
-        # overwrite u0 for production run
+        # set u0 for production run
         u0 = sol.u[end]
+
+        # set u0
+        # TODO - cache the setter
+        states = unknowns(model.sys)
+        u0_setter! = setu(model.sys, states)
+        # directly work on the unknowns in the tunable p
+        u0_setter!(p_work[2], u0)
     end
 
-    @show sampled_uncertain_params
+    # @show sampled_uncertain_params
     @show p_work
 
     # prepare parameters
@@ -247,16 +253,10 @@ function simulate!(model::Model,
             p_symbol_dict[k] = v[i]
         end
 
-        # set u0
-        states = unknowns(model.sys)
-        u0_setter! = setu(model.sys, states)
-        # directly work on the unknowns in the tunable p
-        u0_setter!(p_work[2], u0)
-
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
-        # p = Plots.plot(sol, ylims=(0,1000))
-        # display(p)
+        p = Plots.plot(sol, ylims=(0,1000))
+        display(p)
         
         push!(results, sol)
     end
