@@ -56,13 +56,13 @@ data_subset = vcat(data[:,2], data[:,5], data[:,9])
 spec = TuringSpec(
     data = data_subset,
     t_obs = time,
-#     obs_state_idx = nothing,# 1,
+    obs_state_idx = 1,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65, init_ϵ = 0.001), # MH()
-    n_samples = 1,
+    n_samples = 2,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, ),
