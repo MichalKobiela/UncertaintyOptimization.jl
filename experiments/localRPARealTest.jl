@@ -13,9 +13,10 @@ using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
-using BenchmarkTools
+# using BenchmarkTools
 using Profile
-using ProfileView
+# using ProfileView
+using StatProfilerHTML
 
 
 Random.seed!(0);
@@ -62,21 +63,29 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = NUTS(0.65, init_ϵ = 0.001), # MH()
-    n_samples = 200,
+    n_samples = 3000,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, ),
 )
 
+Profile.init(; n=5000, delay=0.001)
 
-# Profile.clear()
-# @profile 
-chain = run_inference(model, spec)
-# # ProfileView.view()
+Profile.clear()
+@profilehtml chain = run_inference(model, spec)
 
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c.jls", "w")
+f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c_r3.jls", "w")
 serialize(f, chain)
 close(f)
+
+
+Profile.clear()
+@profilehtml chain2 = run_inference(model, spec)
+
+f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c2_r1.jls", "w")
+serialize(f, chain2)
+close(f)
+
 
 # posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
 # samples = Array(posterior_samples)
