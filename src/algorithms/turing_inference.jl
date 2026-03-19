@@ -1,6 +1,6 @@
 using Turing
 using Distributions
-using DistributionsAD
+# using DistributionsAD
 using DynamicPPL
 using SciMLBase: successful_retcode
 
@@ -108,7 +108,13 @@ end
     # and the rest of symbols we can set with multiparam
      
     # TODO - consider using TArray{Float64} in order to have an explicit type (AD-friendly?)
-    uncertain_sampled_values ~ arraydist(collect(uncertain_priors))    
+    uncertain_sampled_values ~ arraydist(collect(uncertain_priors))
+
+    # param_values = []
+    # for sym in uncertain_priors_symbols
+    #     val ~ NamedDist(priors[sym], @varname($sym))
+    #     push!(param_values, val)
+    # end
 
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
         # parameters = drawn_params,
