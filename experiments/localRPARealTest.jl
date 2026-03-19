@@ -20,7 +20,7 @@ using DataFrames
 using StatsPlots
 
 
-Random.seed!(0);
+# Random.seed!(340);
 
 """
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPARealData
@@ -55,6 +55,7 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 # Run inference
+# nuts = NUTS(0.65, init_ϵ = 0.001; adtype = AutoZygote())
 nuts = NUTS(0.65, init_ϵ = 0.001)
 spec = TuringSpec(
     data = data_subset,
@@ -77,7 +78,7 @@ spec = TuringSpec(
 chain = run_inference(model, spec)
 # plot(chain)
 
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c_r1_test.jls", "w")
+f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c_r1_noRand.jls", "w")
 serialize(f, chain)
 close(f)
 
