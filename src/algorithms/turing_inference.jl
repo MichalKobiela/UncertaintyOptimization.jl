@@ -26,7 +26,7 @@ function run_inference(model::Model, spec::TuringSpec)
     priors = make_priors(model)
     
     # 2. Build turing model
-    fit_fcn = fit(model, spec, priors)
+    fit_fcn = fit(model, spec, priors, spec.data)
     #fit_fcn = optim_model()
 
     Turing.setprogress!(true)
@@ -91,7 +91,7 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
-@model function fit(model, spec, uncertain_priors)
+@model function fit(model, spec, uncertain_priors, data)
 
     σ ~ spec.noise_prior
 
@@ -120,23 +120,37 @@ end
         sampled_uncertain_params = uncertain_sampled_values,
         )
 
-
-    # also treat non-successful terminations / NaNs as impossible
-    if !successful_retcode(sols[end].retcode) || any(!isfinite, Array(sols[end]))
-        Turing.@addlogprob!(-Inf)
+    # all solves succeeded
+    if any(sol -> !successful_retcode(sol), sols)
+        Turing.@addlogprob! -1e10
         return
     end
-
-    # this was called before, 
-    # "which state variables to save"
-    # save_idxs=spec.obs_state_idx)
 
     # TODO - generalise choosing how to extract the states
     # predicted = vec(vcat(sol[1,:] for sol in sols))
     predicted = vcat(sols[1][1,:], sols[2][1,:], sols[3][1,:])
 
-    data = spec.data
-    
+        # 2. predicted/data are vectors of same length
+    if !(predicted isa AbstractVector)
+        println("predicted is not abstract")
+        Turing.@addlogprob! -1e10
+        return
+    end
+
+    if length(predicted) != length(data)
+        println("different lengths")
+        @show size(predicted) size(data) length(predicted) length(data)
+        Turing.@addlogprob! -1e10
+        return
+    end
+
+    # finite values only
+    if !all(isfinite, predicted) || !isfinite(σ) || σ <= 0
+        println("not finite")
+        Turing.@addlogprob! -1e10
+        return
+    end    
+
     data ~ MvNormal(predicted, σ^2 * I)
 end
     

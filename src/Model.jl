@@ -250,8 +250,6 @@ function simulate!(model::Model,
         u0_setter!(p_work[2], u0_float)
     end
 
-    
-
     opts_prod = solver_opts
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))

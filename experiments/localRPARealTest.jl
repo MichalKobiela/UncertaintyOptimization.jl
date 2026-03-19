@@ -14,9 +14,10 @@ using CSV, Tables
 using Plots
 using DataFrames
 # using BenchmarkTools
-using Profile
+# using Profile
 # using ProfileView
-using StatProfilerHTML
+# using StatProfilerHTML
+using StatsPlots
 
 
 Random.seed!(0);
@@ -54,6 +55,7 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 # Run inference
+nuts = NUTS(0.65, init_ϵ = 0.001)
 spec = TuringSpec(
     data = data_subset,
     t_obs = time,
@@ -62,29 +64,29 @@ spec = TuringSpec(
     tspan = (0.0, 10.0),
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
-    sampler = NUTS(0.65, init_ϵ = 0.001), # MH()
+    sampler = nuts, # MH()
     n_samples = 3000,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, ),
 )
 
-Profile.init(; n=5000, delay=0.001)
+# Profile.init(; n=5000, delay=0.001)
+# Profile.clear()
+# @profilehtml 
+chain = run_inference(model, spec)
+# plot(chain)
 
-Profile.clear()
-@profilehtml chain = run_inference(model, spec)
-
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c_r3.jls", "w")
+f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c_r1_test.jls", "w")
 serialize(f, chain)
 close(f)
 
+# Profile.clear()
+# @profilehtml chain2 = run_inference(model, spec)
 
-Profile.clear()
-@profilehtml chain2 = run_inference(model, spec)
-
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c2_r1.jls", "w")
-serialize(f, chain2)
-close(f)
+# f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c2_r1.jls", "w")
+# serialize(f, chain2)
+# close(f)
 
 
 # posterior_samples = sample(chain[[:beta_RA, :beta_BA, :beta_BB, :beta_AB]], 1000; replace=false)
