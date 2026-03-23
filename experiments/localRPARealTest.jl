@@ -20,7 +20,7 @@ using DataFrames
 using StatsPlots
 
 
-# Random.seed!(340);
+Random.seed!(0);
 
 """
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPARealData
