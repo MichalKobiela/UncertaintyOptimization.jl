@@ -37,9 +37,11 @@ mutable struct Model
     multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
     # multiparam symbols are ordered
     multiparam_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
+    # TODO -consider a parametric setter? 
+    multiparam_setter!::Any
 
     # fields for inference procedure
-    param_setter!:: Any
+    uncertain_param_setter!:: Any
     # TODO - write that this is ordered, and settable
     uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
     p_vec::Any
@@ -126,7 +128,7 @@ function evaluate_model(model::Model, p_vec)
 
     new_p = model.buffer_func(p_vec)
     
-    model.param_setter!(new_p, p_vec)
+    model.uncertain_param_setter!(new_p, p_vec)
 
     prob_new = remake(model.prob; p=new_p)
 
@@ -213,30 +215,18 @@ function simulate!(model::Model,
 
     prob = model.prob
 
-    # TODO - do you still need params? a dictionary kind of special slow case with a warning?
-
-    # copy here in order to avoid losing the types
-    # TODO cleanup? 
-    # prepare parameters
-    # all multiparams have to be the same length, TODO - check if when parsing initially
-
-    # TODO - set the multiparam values to the defaults
-
-    all_updatable_params = [sampled_uncertain_params; multiparam_values]
-
-    T = eltype(all_updatable_params)
+    # TODO cache
+    # use a tunable container to deal with Duals
+    # this is needed because we extracted the simulate function
+    T = eltype(sampled_uncertain_params)
     p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
 
     # update the uncertain parameters with the drawn samples
     if !isempty(sampled_uncertain_params)
-        # the these parameters form the first part of the p_vec be design
-        # model.param_setter!(p_work, sampled_uncertain_params)
+        model.uncertain_param_setter!(p_work, sampled_uncertain_params)
     end
 
     if !isnothing(model.warmup_settable)
-        # apply the inference parameters
-        model.param_setter!(p_work, sampled_uncertain_params)
-
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
 
@@ -247,7 +237,7 @@ function simulate!(model::Model,
         u0 = sol.u[end]
 
         # set u0
-        # TODO - cache the setter
+        # TODO - cache the setter? 
         states = unknowns(model.sys)
         u0_setter! = setu(model.sys, states)
         # directly work on the unknowns in the tunable p
@@ -262,14 +252,13 @@ function simulate!(model::Model,
     # TODO - maybe allocate results if they are not preallocated? "prealloc_results_vector"
 
     for i in 1:multiparam_length
-        # prepare the parameters for the next run     
+        # get the multi-parameters
         for (j, symbol) in enumerate(model.multiparam_symbols)
             multiparam_values[j] = model.multiparams[symbol][i]
         end
 
-        # apply the inference parameters + multiparams
-        # TODO - optimisation of merge here, this could be a standard array in model that we keep updating by index
-        model.param_setter!(p_work, [sampled_uncertain_params; multiparam_values])
+        # update the p_work
+        model.multiparam_setter!(p_work, multiparam_values)
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
@@ -371,9 +360,7 @@ function setup_simulation!(model::Model,
     # this the array which will allow us to understand where the settable symbols are in the p container copy
     settable_symbols = (uncertain_param_symbols..., multiparam_symbols...)
 
-    # settable parameters: uncertain..., multiparam...
-    settable_params = Tuple([uncertain_Nums; multiparams_Nums])
-
+    # TODO mark as settable ordered
     model.multiparam_symbols = multiparam_symbols
 
     # accounting for warm-up variables is a bit more tricky
@@ -397,7 +384,10 @@ function setup_simulation!(model::Model,
     end
     model.warmup_settable = warmup_settable
 
-    model.param_setter! = setp(model.sys, settable_params)
+    model.uncertain_param_setter! = setp(model.sys, uncertain_Nums)
+
+    # TODO - create one only if needed
+    model.multiparam_setter! = setp(model.sys, multiparams_Nums)
 
     model.p_vec = copy(model.prob.p)
 
