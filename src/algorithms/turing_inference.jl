@@ -24,6 +24,7 @@ function run_inference(model::Model, spec::TuringSpec)
 
     # prepare priors for the uncertain parameters
     priors = make_priors(model)
+    initial_params = make_initial_params(model, spec)
     
     # 2. Build turing model
     fit_fcn = fit(model, spec, priors, spec.data)
@@ -38,10 +39,47 @@ function run_inference(model::Model, spec::TuringSpec)
         spec.sampling_method,
         spec.n_samples,
         spec.n_chains;
-        progress=true
+        progress=true,
+        init_params=initial_params
     )
     
     return chain
+end
+
+function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
+    uncertain_values = Float64[]
+
+    for symbol in model.uncertain_param_symbols
+        if haskey(spec.uncertain_param_values, symbol)
+            push!(uncertain_values, float(spec.uncertain_param_values[symbol]))
+            continue
+        end
+
+        param_spec = model.model_def.parameters[symbol]
+        if isnothing(param_spec.value)
+            error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.uncertain_param_values.")
+        end
+        if param_spec.value isa Tuple || param_spec.value isa AbstractArray
+            error("Uncertain parameter $symbol has a non-scalar initial value, which is not supported for Turing initialisation.")
+        end
+
+        push!(uncertain_values, float(param_spec.value))
+    end
+
+    σ_init = try
+        float(mode(spec.noise_prior))
+    catch
+        try
+            float(mean(spec.noise_prior))
+        catch
+            1.0
+        end
+    end
+
+    return Dict(
+        :σ => σ_init,
+        :uncertain_sampled_values => uncertain_values,
+    )
 end
 
 # -------------------------------------------------------------------------
