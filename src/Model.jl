@@ -198,6 +198,7 @@ function simulate!(model::Model,
                    multiparam_values:: Vector{Float64} = nothing,
                    # the length of a single multiparam, they all have to be the same
                    multiparam_length:: Int  = 1,
+                   prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing
                    )
 
     # build the problem once
@@ -258,7 +259,8 @@ function simulate!(model::Model,
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
-    results = Vector{SciMLBase.ODESolution}()
+    # TODO - maybe allocate results if they are not preallocated? "prealloc_results_vector"
+
     for i in 1:multiparam_length
         # prepare the parameters for the next run     
         for (j, symbol) in enumerate(model.multiparam_symbols)
@@ -273,11 +275,11 @@ function simulate!(model::Model,
 
         # p = Plots.plot(sol, ylims=(0,1000))
         # display(p)
-        
-        push!(results, sol)
+
+        prealloc_results_vector[i] = sol
     end
 
-    return results
+    return prealloc_results_vector
 end
 
 

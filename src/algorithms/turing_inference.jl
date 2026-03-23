@@ -41,11 +41,20 @@ function run_inference(model::Model, spec::TuringSpec)
         end
     end
 
+    # ie how many different parameters (experiments) are being compared
     multiparam_length = isempty(multiparams) ? 1 : length(last(first(multiparams)))
+
+    # preallocate for the hot loop the results vector
+    prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
     
     # 2. Build turing model
-    fit_fcn = fit(model, spec, priors, spec.data; multiparam_values=multiparam_values, multiparam_length = multiparam_length)
+    fit_fcn = fit(model, spec, priors, spec.data; 
+        multiparam_values=multiparam_values, 
+        multiparam_length = multiparam_length,
+        prealloc_results_vector=prealloc_results_vector)
     #fit_fcn = optim_model()
+
+    
 
     # Turing.setprogress!(true)
     
@@ -146,7 +155,11 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
-@model function fit(model, spec, uncertain_priors, data; multiparam_values::Vector{Float64}, multiparam_length::Int = 1)
+@model function fit(model, spec, uncertain_priors, data; 
+    multiparam_values::Vector{Float64}, 
+    multiparam_length::Int = 1,
+    prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing,
+    )
 
     σ ~ spec.noise_prior
 
@@ -182,6 +195,7 @@ end
         sampled_uncertain_params = uncertain_sampled_values,
         multiparam_values = multiparam_values,
         multiparam_length = multiparam_length,
+        prealloc_results_vector = prealloc_results_vector,
         )
 
     # all solves succeeded
@@ -193,6 +207,9 @@ end
     # TODO - generalise choosing how to extract the states
     # predicted = vec(vcat(sol[1,:] for sol in sols))
     predicted = vcat(sols[1][1,:], sols[2][1,:], sols[3][1,:])
+
+    # empty the results for the next run
+    # empty!(sols)
 
         # 2. predicted/data are vectors of same length
     if !(predicted isa AbstractVector)
