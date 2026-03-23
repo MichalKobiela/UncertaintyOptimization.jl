@@ -238,7 +238,7 @@ function simulate!(model::Model,
         model.param_setter!(p_work, sampled_uncertain_params)
 
         # initial params are the warm up params
-        sol = solve(prob, solver, p=p_work; solver_opts...)
+        sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
 
         # p = Plots.plot(sol, ylims=(0,1000))
         # display(p)
