@@ -25,9 +25,23 @@ function run_inference(model::Model, spec::TuringSpec)
     # prepare priors for the uncertain parameters
     priors = make_priors(model)
     initial_params = make_initial_params(model, spec)
+
+    multiparams = model.multiparams
+    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
+    # TODO - initialise, and make explicit ordered
+    multiparam_values = Vector{Float64}(undef, param_len)
+    # initialise the multiparam values to the first value? what about warmup? 
+    for (i, symbol) in enumerate(model.multiparam_symbols)
+        # TODO check if warm up has these parameters
+        if symbol in keys(model.warmup_params)
+            multiparam_values[i] = model.warmup_params[symbol]
+        else
+            multiparam_values[i] = multiparams[symbol][1]
+        end
+    end
     
     # 2. Build turing model
-    fit_fcn = fit(model, spec, priors, spec.data)
+    fit_fcn = fit(model, spec, priors, spec.data; multiparam_values=multiparam_values, multiparam_length = param_len)
     #fit_fcn = optim_model()
 
     Turing.setprogress!(true)
@@ -129,7 +143,7 @@ end
 - Gets priors from metadata
 - Builds likelihood from spec
 """
-@model function fit(model, spec, uncertain_priors, data)
+@model function fit(model, spec, uncertain_priors, data; multiparam_values::Vector{Float64}, multiparam_length::Int = 1)
 
     σ ~ spec.noise_prior
 
@@ -154,6 +168,7 @@ end
     #     push!(param_values, val)
     # end
 
+
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
         # parameters = drawn_params,
         solver=spec.solver, 
@@ -162,6 +177,8 @@ end
         # inference
         solver_opts = spec.solver_opts,
         sampled_uncertain_params = uncertain_sampled_values,
+        multiparam_values = multiparam_values,
+        multiparam_length = multiparam_length,
         )
 
     # all solves succeeded

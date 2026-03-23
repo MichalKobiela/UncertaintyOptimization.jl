@@ -35,6 +35,7 @@ mutable struct Model
     warmup_settable:: Union{Nothing, Vector{Pair{Int32, Float64}}}
     # TODO - add "ordered" ie order matters
     multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
+    # multiparam symbols are ordered
     multiparam_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
 
     # fields for inference procedure
@@ -190,7 +191,12 @@ function simulate!(model::Model,
                    # solve kwargs
                    solver_opts::NamedTuple = NamedTuple(),
                    save_idxs=nothing,
+                   # TODO - consider parametric struct, or something that captures Duals? 
                    sampled_uncertain_params=Any,
+                   # this has the 1st values in the right order
+                   # it is also initialised to warmup value if exists, or first param
+                   multiparam_values:: Vector{Float64} = nothing,
+                   multiparam_length:: Int  = 1,
                    )
 
     # build the problem once
@@ -211,9 +217,6 @@ function simulate!(model::Model,
     # TODO cleanup? 
     # prepare parameters
     # all multiparams have to be the same length, TODO - check if when parsing initially
-    multiparams = model.multiparams
-    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
-    multiparam_values = Vector{Float64}(undef, param_len)
 
     # TODO - set the multiparam values to the defaults
 
@@ -255,10 +258,10 @@ function simulate!(model::Model,
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
     results = Vector{SciMLBase.ODESolution}()
-    for i in 1:param_len
+    for i in 1:multiparam_length
         # prepare the parameters for the next run        
         for (j, symbol) in enumerate(model.multiparam_symbols)
-            multiparam_values[j] = multiparams[symbol][i]
+            multiparam_values[j] = model.multiparams[symbol][i]
         end
 
         # apply the inference parameters + multiparams
