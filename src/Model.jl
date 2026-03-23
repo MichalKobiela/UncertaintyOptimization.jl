@@ -383,7 +383,7 @@ function setup_simulation!(model::Model,
     warmup_settable = Vector{Pair{Int32, Float64}}(undef, length(warmup_map))
     for (i, (warmup_symbol, warmup_value)) in enumerate(warmup_map)
         warmup_index = findfirst(==(warmup_symbol), settable_symbols)
-        push!(warmup_settable, warmup_index => warmup_value)
+        warmup_settable[i] = warmup_index => warmup_value
         if !(warmup_symbol in settable_symbols)
             # TODO account for this case
             error("the warmup parameters is not in settable params")
