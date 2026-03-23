@@ -27,9 +27,10 @@ function run_inference(model::Model, spec::TuringSpec)
     initial_params = make_initial_params(model, spec)
 
     multiparams = model.multiparams
-    param_len = isempty(multiparams) ? 1 : length(first(values(multiparams)))
+    # as in, how many multiparam there is
+    multiparam_count = isempty(multiparams) ? 1 : length(keys(multiparams))
     # TODO - initialise, and make explicit ordered
-    multiparam_values = Vector{Float64}(undef, param_len)
+    multiparam_values = Vector{Float64}(undef, multiparam_count)
     # initialise the multiparam values to the first value? what about warmup? 
     for (i, symbol) in enumerate(model.multiparam_symbols)
         # TODO check if warm up has these parameters
@@ -39,12 +40,14 @@ function run_inference(model::Model, spec::TuringSpec)
             multiparam_values[i] = multiparams[symbol][1]
         end
     end
+
+    multiparam_length = isempty(multiparams) ? 1 : length(last(first(multiparams)))
     
     # 2. Build turing model
-    fit_fcn = fit(model, spec, priors, spec.data; multiparam_values=multiparam_values, multiparam_length = param_len)
+    fit_fcn = fit(model, spec, priors, spec.data; multiparam_values=multiparam_values, multiparam_length = multiparam_length)
     #fit_fcn = optim_model()
 
-    Turing.setprogress!(true)
+    # Turing.setprogress!(true)
     
     # 3. Run sampling
     chain = sample(

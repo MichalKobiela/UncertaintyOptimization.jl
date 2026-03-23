@@ -196,6 +196,7 @@ function simulate!(model::Model,
                    # this has the 1st values in the right order
                    # it is also initialised to warmup value if exists, or first param
                    multiparam_values:: Vector{Float64} = nothing,
+                   # the length of a single multiparam, they all have to be the same
                    multiparam_length:: Int  = 1,
                    )
 
@@ -259,7 +260,7 @@ function simulate!(model::Model,
 
     results = Vector{SciMLBase.ODESolution}()
     for i in 1:multiparam_length
-        # prepare the parameters for the next run        
+        # prepare the parameters for the next run     
         for (j, symbol) in enumerate(model.multiparam_symbols)
             multiparam_values[j] = model.multiparams[symbol][i]
         end
