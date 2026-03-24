@@ -248,6 +248,8 @@ function simulate!(model::Model,
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
 
+        u0 = sol.u[end]
+
         # p = Plots.plot(sol, ylims=(0,1000))
         # display(p)
 
@@ -294,7 +296,7 @@ function simulate!(model::Model,
 
         # p = Plots.plot(sol)#, ylims=(0,1000))
         # display(p)
-        @show sol.u[1]
+        # @show sol.u[1]
 
         prealloc_results_vector[i] = sol
     end
