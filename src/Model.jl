@@ -44,6 +44,7 @@ mutable struct Model
     uncertain_param_setter!:: Any
     # TODO - write that this is ordered, and settable
     uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
+    uncertain_getter::Any
     p_vec::Any
     tunable_pflat::Union{Nothing, TunableP}
     # TODO - explain that this is the look up table for the p container copy
@@ -62,7 +63,7 @@ mutable struct Model
         #Problem and solution are initially empty as they are created during simulation
         new(model_def, sys, nothing, nothing, warmup, nothing, 
         multiparams, nothing,
-        nothing, nothing, nothing, nothing, nothing, nothing)
+        nothing, nothing, nothing, nothing, nothing, nothing, nothing)
 
     end
 end
@@ -221,6 +222,23 @@ function simulate!(model::Model,
     T = eltype(sampled_uncertain_params)
     p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
 
+    # the issue is that it contains also u0
+    # @show p_work
+
+    # try a tunable with getp
+    # p_work2 = replace(Tunable(), model.prob.p, T.(model.uncertain_getter(model.prob)))
+    # @show p_work2
+    # mysetter = setter(p_work, sampled_uncertain_params)
+
+
+    # make your own simple container
+    T = eltype(sampled_uncertain_params)
+    # @show prob.p
+
+    # println(typeof(model.prob.p))
+    # println(length(model.tunable_pflat.tunable_parameters))
+    # println(model.tunable_pflat.tunable_parameters)
+
     # update the uncertain parameters with the drawn samples
     if !isempty(sampled_uncertain_params)
         model.uncertain_param_setter!(p_work, sampled_uncertain_params)
@@ -230,19 +248,35 @@ function simulate!(model::Model,
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
 
+        @show sol.u[1]
+
         # p = Plots.plot(sol, ylims=(0,1000))
         # display(p)
 
         # set u0 for production run
         u0 = sol.u[end]
 
-        # set u0
-        # TODO - cache the setter? 
+        P = typeof(p_work).name.wrapper
+
+        pvec = getfield(p_work, 1)
+        u0_old   = getfield(p_work, 2)
+        f3       = getfield(p_work, 3)
+        f4       = getfield(p_work, 4)
+        f5       = getfield(p_work, 5)
+        f6       = getfield(p_work, 6)
+
         states = unknowns(model.sys)
         u0_setter! = setu(model.sys, states)
-        # directly work on the unknowns in the tunable p
-        u0_float = undual.(u0)
-        u0_setter!(p_work[2], u0_float)
+
+        # set u0
+        # TODO - cache the setter? 
+        T = eltype(u0)
+        u0_work = similar(u0_old, T)
+        copyto!(u0_work, u0_old)
+        p_work = P(pvec, u0_work, f3, f4, f5, f6)
+        u0_setter!(p_work[2], u0)
+
+        # @show p_work
     end
 
     opts_prod = solver_opts
@@ -262,8 +296,9 @@ function simulate!(model::Model,
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
-        # p = Plots.plot(sol, ylims=(0,1000))
+        # p = Plots.plot(sol)#, ylims=(0,1000))
         # display(p)
+        @show sol.u[1]
 
         prealloc_results_vector[i] = sol
     end
@@ -357,6 +392,16 @@ function setup_simulation!(model::Model,
         multiparams_Nums[i] = getproperty(model.sys, symbol)
     end
 
+    # states = unknowns(model.sys)
+    # @show states
+    # @show length(states)
+    # u0_Nums = Vector{Num}(undef, length(states))
+    # for (i, symbol) in enumerate(states)
+    #     u0_Nums[i] = getproperty(model.sys, nameof(symbol))
+    # end
+
+    @show tunable_parameters(model.sys)
+
     # this the array which will allow us to understand where the settable symbols are in the p container copy
     settable_symbols = (uncertain_param_symbols..., multiparam_symbols...)
 
@@ -396,6 +441,9 @@ function setup_simulation!(model::Model,
     model.tunable_pflat = TunableP(tunable_pflat)
 
     model.settable_symbols = settable_symbols
+
+    # getter setter
+    # model.uncertain_getter = getp(model.sys, [uncertain_Nums; u0_Nums])
 
     # model.buffer_func = (p) -> remake_buffer(
     #     model.sys, model.prob.p, Dict(zip(uncertain_syms, p))

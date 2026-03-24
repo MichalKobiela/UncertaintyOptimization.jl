@@ -110,8 +110,13 @@ parameters:
 
   kx2:
     value: 36.4063
-    role: design
-    bounds: [0.0, 1e4]
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1e4
+    # role: design
+    # bounds: [0.0, 1e4]
 
   nx2:
     value: 1.3

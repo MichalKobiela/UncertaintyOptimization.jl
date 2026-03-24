@@ -84,7 +84,7 @@ struct TuringSpec <: InferenceSpec
                       sampler=NUTS(0.65),
                       n_samples::Int=1000,
                       n_chains::Int=3,
-                      sampling_method=MCMCThreads(),
+                      sampling_method=MCMCSerial(),
                       solver=Euler(),
                     #   dt::Float64=nothing,
                       solver_opts::NamedTuple=NamedTuple(),
