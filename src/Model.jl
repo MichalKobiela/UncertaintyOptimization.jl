@@ -248,14 +248,10 @@ function simulate!(model::Model,
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
 
-        @show sol.u[1]
-
         # p = Plots.plot(sol, ylims=(0,1000))
         # display(p)
 
         # set u0 for production run
-        u0 = sol.u[end]
-
         P = typeof(p_work).name.wrapper
 
         pvec = getfield(p_work, 1)
