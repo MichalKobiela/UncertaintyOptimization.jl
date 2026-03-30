@@ -214,6 +214,10 @@ function simulate!(model::Model,
                         solver_opts=solver_opts)
     end
 
+    # println("Has jac field? ", hasproperty(model.prob.f, :jac))
+    # println("jac = ", hasproperty(model.prob.f, :jac) ? model.prob.f.jac : "no field")
+    # println("jac_prototype = ", hasproperty(model.prob.f, :jac_prototype) ? model.prob.f.jac_prototype : "no field")
+
     prob = model.prob
 
     # TODO cache
@@ -372,7 +376,8 @@ function setup_simulation!(model::Model,
     )
 
     # Create the problem with all parameters and their starting values - including user provided ones
-    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan)
+    # TODO - revisit jac=True (should be on by default, what about yaml)
+    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true, sparse=true)
     
     # TODO - switch to a vector of symbols?
     uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
