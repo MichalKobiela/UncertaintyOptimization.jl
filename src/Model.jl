@@ -298,6 +298,8 @@ function simulate!(model::Model,
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
+        # println(sol.destats)
+
         # p = Plots.plot(sol)#, ylims=(0,1000))
         # display(p)
         # @show sol.u[1]
@@ -377,7 +379,7 @@ function setup_simulation!(model::Model,
 
     # Create the problem with all parameters and their starting values - including user provided ones
     # TODO - revisit jac=True (should be on by default, what about yaml)
-    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true, sparse=true)
+    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)#, sparse=true)
     
     # TODO - switch to a vector of symbols?
     uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
