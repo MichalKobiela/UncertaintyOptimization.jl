@@ -66,9 +66,12 @@ Helper to convert a char read from the YAML to an @parameter required for the Mo
 
 """
 
-function create_param(x)
+function create_param(x; tunable::Bool=false)
     sym = Symbol(x)
-    Symbolics.unwrap(first(@parameters $sym))
+    # ideally we'd do this
+    # Symbolics.unwrap(first(@parameters $sym [tunable = $tunable]))
+    # TODO - this eval created a global symbol that later creates issues with const, 
+    Symbolics.unwrap(first(@eval ModelingToolkit.@parameters $sym [tunable = $tunable]))
 end
 
 """
@@ -133,9 +136,13 @@ function build_symbolics(config::Dict)
     # Get parameters specifications
     param_specs = Dict{Symbol, ParameterSpec}()
 
+    # TODO - it would be nice to keep the same order as YAML
     for (pname_str, pinfo) in config["parameters"]   
-        param = create_param(pname_str)   # create MTK parameter
         role = Symbol(pinfo["role"])
+
+        tunable = role == :uncertain
+        param = create_param(pname_str; tunable=tunable)   # create MTK parameter
+
         value = get(pinfo, "value", nothing)
         warmup_value = get(pinfo, "warmup_value", nothing)
         bounds = haskey(pinfo, "bounds") ? tuple(pinfo["bounds"]...) : nothing
@@ -157,6 +164,8 @@ function build_symbolics(config::Dict)
         error("❌ Unsupported input signal type: $(config["type"])")
     end
 
+    
+    
 
     return (states=state_map, parameters=param_specs, input=input)
 
@@ -168,7 +177,7 @@ end
 function expr_to_symbolic(expr_str::String, symbolics)
     # Build an sandbox mapping symbols -> symbolic variables
     env = Dict{Symbol, Any}()
-    
+
     for (k, v) in symbolics.states
         env[k] = v
     end
@@ -184,7 +193,8 @@ function expr_to_symbolic(expr_str::String, symbolics)
     parsed = Meta.parse(expr_str)
 
     # Evaluate it symbolically - might need to watch out here
-    return Base.invokelatest(eval, Expr(:block, [:(const $(k) = $(v)) for (k, v) in env]..., parsed))
+    # TODO - ideally put back the const
+    return Base.invokelatest(eval, Expr(:block, [:($(k) = $(v)) for (k, v) in env]..., parsed))
 end
 
 function expr_to_symbolic(expr::Expr, symbolics)
@@ -239,13 +249,13 @@ from a YAML file.
 """
 
 function load_model(filename::String)
-
     config = load_YAML(filename)
     validate_YAML(config)
 
     info = get_model_info(config)
     syms = build_symbolics(config)
     eqs = build_equations(config, syms)
+        
 
     return ModelDefinition(info.model_name,
                            info.model_description,
