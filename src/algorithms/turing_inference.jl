@@ -3,6 +3,7 @@ using Distributions
 # using DistributionsAD
 using DynamicPPL
 using SciMLBase: successful_retcode
+# using InteractiveUtils
 
 
 function run_inference(model::Model, spec::TuringSpec)
@@ -185,6 +186,7 @@ end
     # end
 
 
+    # @code_warntype 
     sols = simulate!(model, spec.initial_conditions, spec.tspan;
         # parameters = drawn_params,
         solver=spec.solver, 

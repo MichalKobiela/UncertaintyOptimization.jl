@@ -14,13 +14,13 @@ using CSV, Tables
 using Plots
 using DataFrames
 # using BenchmarkTools
-# using Profile
+using Profile
 # using ProfileView
 # using StatProfilerHTML
 using StatsPlots
 
 
-Random.seed!(1);
+Random.seed!(0);
 
 """
 Local testing script for the RPA model as in the paper and repo here: https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPARealData
@@ -31,6 +31,7 @@ RPA_model = load_model("./test/test-data/RPA_real/RPA_real_opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
+# TODO - consider using @named with structural simplify for 100% certainty
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
@@ -66,21 +67,32 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 30,
+    n_samples = 5,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, dense=false),
 )
 
-# Profile.init(; n=5000, delay=0.001)
-# Profile.clear()
-# @profilehtml 
-chain = run_inference(model, spec)
-# plot(chain)
 
-f = open(string(@__DIR__)*"/posterior_samples_large_range_1_c4_r1.jls", "w")
+# chain = run_inference(model, spec)
+
+Profile.init(; n=10^7, delay=0.001)
+Profile.clear_malloc_data()
+Profile.clear()
+@profile chain = run_inference(model, spec)
+data, lidict = Profile.retrieve()
+serialize("profile_results_1thread.jlprof", (data, lidict))
+
+
+# plot(chain)
+f = open(string(@__DIR__)*"/posterior_try22.jls", "w")
 serialize(f, chain)
 close(f)
+
+# chain2 = run_inference(model, spec)
+# f = open(string(@__DIR__)*"/posterior_samples_large_range_1_chain2_c11_r1.jls", "w")
+# serialize(f, chain2)
+# close(f)
 
 # Profile.clear()
 # @profilehtml chain2 = run_inference(model, spec)
