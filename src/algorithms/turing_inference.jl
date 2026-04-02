@@ -35,6 +35,7 @@ function run_inference(model::Model, spec::TuringSpec)
     # initialise the multiparam values to the first value? what about warmup? 
     for (i, symbol) in enumerate(model.multiparam_symbols)
         # TODO check if warm up has these parameters
+        # TODO this is no longer necessary as we have a specific setter up now for multiparam
         if symbol in keys(model.warmup_params)
             multiparam_values[i] = model.warmup_params[symbol]
         else
@@ -54,8 +55,6 @@ function run_inference(model::Model, spec::TuringSpec)
         multiparam_length = multiparam_length,
         prealloc_results_vector=prealloc_results_vector)
     #fit_fcn = optim_model()
-
-    
 
     # Turing.setprogress!(true)
     
@@ -202,7 +201,7 @@ end
 
     # all solves succeeded
     if any(sol -> !successful_retcode(sol), sols)
-        Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -Inf # -1e10
         return
     end
 
@@ -216,21 +215,21 @@ end
         # 2. predicted/data are vectors of same length
     if !(predicted isa AbstractVector)
         println("predicted is not abstract")
-        Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -Inf # -1e10
         return
     end
 
     if length(predicted) != length(data)
         println("different lengths")
         @show size(predicted) size(data) length(predicted) length(data)
-        Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -Inf # -1e10
         return
     end
 
     # finite values only
     if !all(isfinite, predicted) || !isfinite(σ) || σ <= 0
         println("not finite")
-        Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -Inf # -1e10
         return
     end    
 

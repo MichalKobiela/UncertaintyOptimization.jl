@@ -9,13 +9,13 @@ model:
 equations:
   A: |
     0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+          (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+          0.02 * r1 * max(A, 0)
 
   B: |
-    0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2)
+    0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3) *
+          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+          0.1 * r2 * max(B, 0)
 
 simulation:
     tspan: [0.0, 10.0]
@@ -32,8 +32,8 @@ parameters:
       upper: 2000.0
 
   alpha_2:
+    # value: 10.0
     value: 391.1627
-    # value: 191.1627
     role: uncertain
     prior:
       distribution: uniform

@@ -67,25 +67,25 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 5,
+    n_samples = 3,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, dense=false),
 )
 
 
-# chain = run_inference(model, spec)
+chain = run_inference(model, spec)
 
-Profile.init(; n=10^7, delay=0.001)
-Profile.clear_malloc_data()
-Profile.clear()
-@profile chain = run_inference(model, spec)
-data, lidict = Profile.retrieve()
-serialize("profile_results_1thread.jlprof", (data, lidict))
+# Profile.init(; n=10^7, delay=0.001)
+# Profile.clear_malloc_data()
+# Profile.clear()
+# @profile chain = run_inference(model, spec)
+# data, lidict = Profile.retrieve()
+# serialize("profile_results_1thread.jlprof", (data, lidict))
 
 
-# plot(chain)
-f = open(string(@__DIR__)*"/posterior_try22.jls", "w")
+plot(chain)
+f = open(string(@__DIR__)*"/posterior_try29.jls", "w")
 serialize(f, chain)
 close(f)
 

@@ -71,7 +71,8 @@ function create_param(x; tunable::Bool=false)
     # ideally we'd do this
     # Symbolics.unwrap(first(@parameters $sym [tunable = $tunable]))
     # TODO - this eval created a global symbol that later creates issues with const, 
-    Symbolics.unwrap(first(@eval ModelingToolkit.@parameters $sym [tunable = $tunable]))
+    # Symbolics.unwrap(first(@eval ModelingToolkit.@parameters $sym [tunable = $tunable]))
+    Symbolics.unwrap(first(@parameters $sym))
 end
 
 """
@@ -193,8 +194,10 @@ function expr_to_symbolic(expr_str::String, symbolics)
     parsed = Meta.parse(expr_str)
 
     # Evaluate it symbolically - might need to watch out here
-    # TODO - ideally put back the const
+    # TODO - puruse the meaning of invokelatest? "it says: this is dynamic?"?
     return Base.invokelatest(eval, Expr(:block, [:($(k) = $(v)) for (k, v) in env]..., parsed))
+    # return Base.invokelatest(eval, Expr(:block, parsed))
+    # return Base.invokelatest(eval, Expr(:block, [:(const $(k) = $(v)) for (k, v) in env]..., parsed))
 end
 
 function expr_to_symbolic(expr::Expr, symbolics)

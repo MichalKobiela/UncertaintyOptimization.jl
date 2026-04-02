@@ -179,29 +179,25 @@ SHOULD NOT MAKE ALTER THE MODEL!
 """
 
 
-# helpers
-undual(x) = x
-undual(x::ForwardDiff.Dual) = ForwardDiff.value(x)
-
-
-function simulate!(model::Model, 
-                   initial_conditions::Tuple{Vararg{Float64}},
-                   tspan::Tuple{Float64, Float64};
+function simulate!(model::Any, #Model, 
+                   initial_conditions::Any, #Tuple{Vararg{Float64}},
+                   tspan::Any, #Tuple{Float64, Float64}
+                   ;
                    parameters::Dict=Dict{Symbol,Float64}(),
-                   solver=Rosenbrock23(),
+                   solver = Rosenbrock23(),
                 #    dt::Float64=nothing,
-                   saveat=Float64[],
+                   saveat::Any = Float64[], # TODO - change to vector 
                    # solve kwargs
-                   solver_opts::NamedTuple = NamedTuple(),
-                   save_idxs=nothing,
+                   solver_opts::NamedTuple = (;),
+                   save_idxs::Any = nothing,
                    # TODO - consider parametric struct, or something that captures Duals? 
-                   sampled_uncertain_params=Any,
+                   sampled_uncertain_params::Any = nothing,
                    # this has the 1st values in the right order
                    # it is also initialised to warmup value if exists, or first param
-                   multiparam_values:: Vector{Float64} = nothing,
+                   multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
                    # the length of a single multiparam, they all have to be the same
-                   multiparam_length:: Int  = 1,
-                   prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing
+                   multiparam_length:: Int = 1,
+                   prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing
                    )
 
     # build the problem once
@@ -214,50 +210,51 @@ function simulate!(model::Model,
                         solver_opts=solver_opts)
     end
 
-    # println("Has jac field? ", hasproperty(model.prob.f, :jac))
-    # println("jac = ", hasproperty(model.prob.f, :jac) ? model.prob.f.jac : "no field")
-    # println("jac_prototype = ", hasproperty(model.prob.f, :jac_prototype) ? model.prob.f.jac_prototype : "no field")
-
     prob = model.prob
 
-    # TODO cache
-    # use a tunable container to deal with Duals
-    # this is needed because we extracted the simulate function
-    T = eltype(sampled_uncertain_params)
-    p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
+    if !isnothing(sampled_uncertain_params)
+        T = eltype(sampled_uncertain_params)
+        p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
 
-    # the issue is that it contains also u0
-    # @show p_work
-
-    # try a tunable with getp
-    # p_work2 = replace(Tunable(), model.prob.p, T.(model.uncertain_getter(model.prob)))
-    # @show p_work2
-    # mysetter = setter(p_work, sampled_uncertain_params)
-
-
-    # make your own simple container
-    T = eltype(sampled_uncertain_params)
-    # @show prob.p
-
-    # println(typeof(model.prob.p))
-    # println(length(model.tunable_pflat.tunable_parameters))
-    # println(model.tunable_pflat.tunable_parameters)
-
-    # update the uncertain parameters with the drawn samples
-    if !isempty(sampled_uncertain_params)
         model.uncertain_param_setter!(p_work, sampled_uncertain_params)
+    else
+        # does not happen during inference
+        # ----- can be part of the Model? this way you do not need to provide it twice (in inference and here)
+        p_work = replace(Tunable(), prob.p, model.tunable_pflat.tunable_parameters)
+
+        # TODO - these values should be created in setup_simulation if they are not passed
+        # assume it is not inference, and create other objects
+        multiparams = model.multiparams
+        # as in, how many multiparam there is
+        multiparam_count = isempty(multiparams) ? 1 : length(keys(multiparams))
+        # TODO - initialise, and make explicit ordered
+        multiparam_values = Vector{Float64}(undef, multiparam_count)
+        # initialise the multiparam values to the first value? what about warmup? 
+        for (i, symbol) in enumerate(model.multiparam_symbols)
+            # TODO check if warm up has these parameters
+            # TODO this is no longer necessary as we have a specific setter up now for multiparam
+            if symbol in keys(model.warmup_params)
+                multiparam_values[i] = model.warmup_params[symbol]
+            else
+                multiparam_values[i] = multiparams[symbol][1]
+            end
+        end
+        prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
+        # ----- can be part of the Model? 
     end
 
     if !isnothing(model.warmup_settable)
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
+        # @show prob
+        # TODO - add as optional
+        # sol = solve(prob, solver, p=p_work; solver_opts..., dense=false)
+
+        # p = Plots.plot(sol)
+        # display(p)
 
         u0 = sol.u[end]
 
-        # p = Plots.plot(sol, ylims=(0,1000))
-        # display(p)
-
-        # set u0 for production run
         P = typeof(p_work).name.wrapper
 
         pvec = getfield(p_work, 1)
@@ -277,32 +274,25 @@ function simulate!(model::Model,
         copyto!(u0_work, u0_old)
         p_work = P(pvec, u0_work, f3, f4, f5, f6)
         u0_setter!(p_work[2], u0)
-
-        # @show p_work
     end
 
     opts_prod = solver_opts
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
-    # TODO - maybe allocate results if they are not preallocated? "prealloc_results_vector"
-
+    # @show multiparam_length
     for i in 1:multiparam_length
-        # get the multi-parameters
         for (j, symbol) in enumerate(model.multiparam_symbols)
+            # @show model.multiparams[symbol]
             multiparam_values[j] = model.multiparams[symbol][i]
         end
 
-        # update the p_work
         model.multiparam_setter!(p_work, multiparam_values)
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
-        # println(sol.destats)
-
-        # p = Plots.plot(sol)#, ylims=(0,1000))
+        # p = Plots.plot(sol)
         # display(p)
-        # @show sol.u[1]
 
         prealloc_results_vector[i] = sol
     end
@@ -329,7 +319,7 @@ function setup_simulation!(model::Model,
                           uncertain_param_values::Any,
                           tspan::Tuple{Float64, Float64};
                           solver::Any=Euler(),
-                          solver_opts::NamedTuple=NamedTuple(),
+                          solver_opts::Union{Nothing, NamedTuple}=NamedTuple(),
                           t_obs::Union{Vector{Float64}, Nothing}=nothing,
                           obs_state_idx::Union{Int, Nothing}=nothing,
                           )
