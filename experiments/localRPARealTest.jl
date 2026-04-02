@@ -39,7 +39,7 @@ init_cond = (24.0, 350.0) # Initial values for y1 and y2
 tspan = (0.0, 10.0)
         
 # Run simulation
-# sols = simulate!(model, init_cond, tspan)
+# sols = simulate!(model, init_cond, tspan; multiparam_length=3)
 # for sol in sols
 #     p = Plots.plot(sol)
 #     display(p)
@@ -67,7 +67,7 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 3,
+    n_samples = 3000,
     n_chains = 1,
     solver = Rosenbrock23(),
     solver_opts = (dtmin=1e-12, dense=false),
@@ -84,8 +84,8 @@ chain = run_inference(model, spec)
 # serialize("profile_results_1thread.jlprof", (data, lidict))
 
 
-plot(chain)
-f = open(string(@__DIR__)*"/posterior_try29.jls", "w")
+# plot(chain)
+f = open(string(@__DIR__)*"/posterior_try31_fullLoop_smoothpos_noConst_normPen.jls", "w")
 serialize(f, chain)
 close(f)
 

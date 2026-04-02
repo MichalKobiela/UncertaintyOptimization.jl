@@ -201,7 +201,7 @@ end
 
     # all solves succeeded
     if any(sol -> !successful_retcode(sol), sols)
-        Turing.@addlogprob! -Inf # -1e10
+        Turing.@addlogprob! -1e10
         return
     end
 
@@ -215,21 +215,22 @@ end
         # 2. predicted/data are vectors of same length
     if !(predicted isa AbstractVector)
         println("predicted is not abstract")
-        Turing.@addlogprob! -Inf # -1e10
+        #Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -1e10
         return
     end
 
     if length(predicted) != length(data)
         println("different lengths")
         @show size(predicted) size(data) length(predicted) length(data)
-        Turing.@addlogprob! -Inf # -1e10
+        Turing.@addlogprob! -1e10
         return
     end
 
     # finite values only
     if !all(isfinite, predicted) || !isfinite(σ) || σ <= 0
         println("not finite")
-        Turing.@addlogprob! -Inf # -1e10
+        Turing.@addlogprob! -1e10
         return
     end    
 

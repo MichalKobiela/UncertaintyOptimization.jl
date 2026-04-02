@@ -283,7 +283,6 @@ function simulate!(model::Any, #Model,
     # @show multiparam_length
     for i in 1:multiparam_length
         for (j, symbol) in enumerate(model.multiparam_symbols)
-            # @show model.multiparams[symbol]
             multiparam_values[j] = model.multiparams[symbol][i]
         end
 
