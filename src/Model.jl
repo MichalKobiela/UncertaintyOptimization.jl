@@ -179,9 +179,9 @@ SHOULD NOT MAKE ALTER THE MODEL!
 """
 
 
-function simulate!(model::Any, #Model, 
-                   initial_conditions::Any, #Tuple{Vararg{Float64}},
-                   tspan::Any, #Tuple{Float64, Float64}
+function simulate!(model::Model, 
+                   initial_conditions::Tuple{Vararg{Float64}},
+                   tspan::Tuple{Float64, Float64}
                    ;
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver = Rosenbrock23(),
@@ -191,7 +191,7 @@ function simulate!(model::Any, #Model,
                    solver_opts::NamedTuple = (;),
                    save_idxs::Any = nothing,
                    # TODO - consider parametric struct, or something that captures Duals? 
-                   sampled_uncertain_params::Any = nothing,
+                   sampled_uncertain_params::AbstractVector = nothing,
                    # this has the 1st values in the right order
                    # it is also initialised to warmup value if exists, or first param
                    multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
@@ -202,6 +202,7 @@ function simulate!(model::Any, #Model,
 
     # build the problem once
     if isnothing(model.prob)
+        println("set up simulation")
         setup_simulation!(model, 
                         initial_conditions, 
                         parameters, 
@@ -243,9 +244,11 @@ function simulate!(model::Any, #Model,
         # ----- can be part of the Model? 
     end
 
+
     if !isnothing(model.warmup_settable)
         # initial params are the warm up params
         sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
+
         # @show prob
         # TODO - add as optional
         # sol = solve(prob, solver, p=p_work; solver_opts..., dense=false)
@@ -254,6 +257,7 @@ function simulate!(model::Any, #Model,
         # display(p)
 
         u0 = sol.u[end]
+        
 
         P = typeof(p_work).name.wrapper
 
@@ -361,6 +365,8 @@ function setup_simulation!(model::Model,
     # This creates the dictionary that MTK needs to build the problem
     params = merge(p_map, warmup_map)
 
+    # temporarily create locally with let the same variables
+
     p_map_vars = Dict(
         getproperty(model.sys, name) => val
         for (name, val) in params
@@ -369,7 +375,7 @@ function setup_simulation!(model::Model,
     # Create the problem with all parameters and their starting values - including user provided ones
     # TODO - revisit jac=True (should be on by default, what about yaml)
     model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)#, sparse=true)
-    
+
     # TODO - switch to a vector of symbols?
     uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
     for (i, name) in enumerate(uncertain_param_symbols)
