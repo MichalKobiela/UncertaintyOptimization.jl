@@ -27,7 +27,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model("./test/test-data/RPA_real/RPA_real_opt.yml")
+RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
@@ -55,6 +55,8 @@ data = data .- background_fluorescence
 # select specific modelled data
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
+rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
+
 # Run inference
 # nuts = NUTS(0.65, init_ϵ = 0.001; adtype = AutoZygote())
 nuts = NUTS(0.65, init_ϵ = 0.001)
@@ -69,8 +71,13 @@ spec = TuringSpec(
     sampler = nuts, # MH()
     n_samples = 3000,
     n_chains = 1,
-    solver = Rosenbrock23(),
-    solver_opts = (dtmin=1e-12, dense=false),
+    # abstol and reltol? 
+#     solver = Rosenbrock23(),
+    solver = AutoTsit5(Rosenbrock23()),
+#     solver = Tsit5(),
+#     solver = FBDF(),
+#     solver = Rodas5P(),
+    solver_opts = (dtmin=1e-12, dense=false, maxiters=100_000, reltol=1e-5, abstol=1e-7),
 )
 
 
@@ -85,7 +92,7 @@ chain = run_inference(model, spec)
 
 
 # plot(chain)
-f = open(string(@__DIR__)*"/posterior_try31_fullLoop_smoothpos_noConst_normPen.jls", "w")
+f = open(string(@__DIR__)*"/posterior_try42_autoSolver_max100k.jls", "w")
 serialize(f, chain)
 close(f)
 
