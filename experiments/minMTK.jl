@@ -16,8 +16,6 @@ using DataFrames
 Random.seed!(0);
 
 
-using ModelingToolkit
-
 # Define a nonlinear system
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true] 
