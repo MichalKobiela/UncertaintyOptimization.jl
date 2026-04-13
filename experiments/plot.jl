@@ -1,18 +1,10 @@
 using Revise
-using UncertaintyOptimization
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D;
-using OrdinaryDiffEq
-using CSV, Tables
 using Turing
 using SciMLBase: VectorOfArray
 using SymbolicIndexingInterface
 using Random
-using PreallocationTools
 using Serialization
-using CSV, Tables
-using Plots
-
+using StatsPlots
 
 #open the chains
 chain = open(string(@__DIR__)*"/posterior_samples_large_range_1_c11_r1_u0AD.jls", "r") do io
@@ -26,7 +18,7 @@ end
 # 10:kr, 11:kx1, 12:alpha_2, 13:alpha_1, 
 # 14:alpha_3, 15:beta_4
 
-chain_2 = open(string(@__DIR__)*"/minmtk_c1.jls", "r") do io
+chain_2 = open(string(@__DIR__)*"/minmtk_c2_corrected_u0_remake.jls", "r") do io
         deserialize(io)
 end
 
