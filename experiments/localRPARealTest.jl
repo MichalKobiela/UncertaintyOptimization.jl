@@ -18,6 +18,7 @@ using Profile
 # using ProfileView
 # using StatProfilerHTML
 using StatsPlots
+using SciMLSensitivity
 
 
 Random.seed!(0);
@@ -72,12 +73,12 @@ spec = TuringSpec(
     n_samples = 3000,
     n_chains = 1,
     # abstol and reltol? 
-#     solver = Rosenbrock23(),
-    solver = AutoTsit5(Rosenbrock23()),
+    solver = Rosenbrock23(),
+    # solver = AutoTsit5(Rosenbrock23()),
 #     solver = Tsit5(),
 #     solver = FBDF(),
-#     solver = Rodas5P(),
-    solver_opts = (dtmin=1e-12, dense=false, maxiters=100_000, reltol=1e-5, abstol=1e-7),
+    # solver = Rodas5P(),
+    solver_opts = (dtmin=1e-12, dense=false, sensealg=ForwardDiffSensitivity(chunk_size=16))#, maxiters=100_000, reltol=1e-5, abstol=1e-7),
 )
 
 
@@ -92,7 +93,7 @@ chain = run_inference(model, spec)
 
 
 # plot(chain)
-f = open(string(@__DIR__)*"/posterior_try42_autoSolver_max100k.jls", "w")
+f = open(string(@__DIR__)*"/posterior_try46_forward_sensitivity.jls", "w")
 serialize(f, chain)
 close(f)
 
