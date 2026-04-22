@@ -5,12 +5,15 @@ using OrdinaryDiffEq
 using CSV, Tables
 using Turing
 using SciMLBase: VectorOfArray
+using SciMLStructures: Tunable, canonicalize, replace, replace!
 using SymbolicIndexingInterface
 using Random
 using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
+using Distributions
+# using DistributionsAD
 
 
 Random.seed!(0);
@@ -45,8 +48,7 @@ eqs = [
     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-       
-        ]
+    ]
 @mtkcompile ns = System(eqs, t)
 
 guesses = [
@@ -68,11 +70,68 @@ guesses = [
     r2      => 7.0188,
 ]
 
+guesses_values = [
+    83.4743, # alpha_1
+    391.1627, # alpha_2
+    17.7437, # alpha_3
+    8.7519e6, # alpha_4
+    11.9586, # beta_1
+    3.9e-4, # beta_2
+    0.6644, # beta_3
+    7.1347, # beta_4
+    1.28e-8, # kx1
+    2.34, # nx1
+    36.4063, # kx2
+    1.3, # nx2
+    0.51, # kr
+    3.2, # nr
+    89.0635, # r1
+    7.0188, # r2
+]
+
 ps = [kx3 => 4006.9, kcymRtot => 2.75e3, cuma => 2e-6]
 
 u0 = [A => 24.0, B => 350.0]
 p = vcat(guesses, ps)
 prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
+
+## configure a setter
+# decide on the order of uncertain Symbol
+# we do cuma first because we want to be able to set it without changing everything else
+ordered_settable_symbols = (
+        # :cuma,
+        :alpha_1, 
+        :alpha_2,
+        :alpha_3,
+        :alpha_4,
+        :beta_1,
+        :beta_2,
+        :beta_3,
+        :beta_4,
+        :kx1,
+        :nx1,
+        :kx2,
+        :nx2,
+        :kr,
+        :nr,
+        :r1,
+        :r2,
+        )
+
+# get the Nums for the setter
+multiparams_Nums = Vector{Num}(undef, length(ordered_settable_symbols))
+for (i, symbol) in enumerate(ordered_settable_symbols)
+    multiparams_Nums[i] = getproperty(ns, symbol)
+end
+
+# create a setter for your specific symbol order
+uncertain_setter! = setp(ns, multiparams_Nums)
+
+# cuma setter
+cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
+
+# create a tunable
+tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
 
 # warm = solve(prob, Rosenbrock23())
 # # display(Plots.plot(sol))
@@ -85,10 +144,12 @@ prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
 # sol = solve(prob_1, Rosenbrock23())
 # display(Plots.plot(sol))
 
-@model function fit(data::AbstractVector, prob, saveat::AbstractVector)
+@model function fit(data::AbstractVector, prob, saveat::AbstractVector;
+    force_values=nothing)
 
     σ ~ InverseGamma(2, 3)
 
+    # draw uncertain
     alpha_1 ~ Distributions.Uniform(0.0, 2000.0)
     alpha_2 ~ Distributions.Uniform(0.0, 250.0)
     alpha_3 ~ Distributions.Uniform(0.0, 1e4)
@@ -98,7 +159,7 @@ prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
     beta_3 ~ Distributions.Uniform(0.0, 5e3)
     beta_4 ~ Distributions.Uniform(0.0, 5000.0)
     kx1 ~ Distributions.Uniform(0.0, 3e-8)
-    nx1 ~ Distributions.Uniform(0.0, 5.0)
+    nx1 ~ Distributions.Uniform(1.0, 5.0)
     kx2 ~ Distributions.Uniform(0.0, 1e4)
     nx2 ~ Distributions.Uniform(1.0, 10.0)
     kr ~ Distributions.Uniform(0.0, 100.0)
@@ -106,25 +167,74 @@ prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
     r1 ~ Distributions.Uniform(0.0, 1000.0)
     r2 ~ Distributions.Uniform(0.0, 1000.0)
 
-    param_dict = Dict{Symbol, Number}(
-        :alpha_1 => alpha_1,
-        :alpha_2 => alpha_2,
-        :alpha_3 => alpha_3,
-        :alpha_4 => alpha_4,
-        :beta_1  => beta_1,
-        :beta_2  => beta_2,
-        :beta_3  => beta_3,
-        :beta_4  => beta_4,
-        :kx1     => kx1,
-        :nx1     => nx1,
-        :kx2     => kx2,
-        :nx2     => nx2,
-        :kr      => kr,
-        :nr      => nr,
-        :r1      => r1,
-        :r2      => r2,
-        :cuma => 2e-5 # manual
-    )
+    # draws ~ arraydist(collect((
+    #     Distributions.Uniform(0.0, 2000.0),
+    #     Distributions.Uniform(0.0, 250.0),
+    #     Distributions.Uniform(0.0, 1e4),
+    #     Distributions.Uniform(0.0, 1e13),
+    #     Distributions.Uniform(0.0, 200.0),
+    #     Distributions.Uniform(0.0, 100.0),
+    #     Distributions.Uniform(0.0, 5e3),
+    #     Distributions.Uniform(0.0, 5000.0),
+    #     Distributions.Uniform(0.0, 3e-8),
+    #     Distributions.Uniform(1.0, 5.0),
+    #     Distributions.Uniform(0.0, 1e4),
+    #     Distributions.Uniform(1.0, 10.0),
+    #     Distributions.Uniform(0.0, 100.0),
+    #     Distributions.Uniform(1.0, 100.0),
+    #     Distributions.Uniform(0.0, 1000.0),
+    #     Distributions.Uniform(0.0, 1000.0))))
+
+    draws = [
+        alpha_1 
+        alpha_2 
+        alpha_3 
+        alpha_4 
+        beta_1 
+        beta_2 
+        beta_3 
+        beta_4 
+        kx1 
+        nx1 
+        kx2 
+        nx2 
+        kr 
+        nr 
+        r1 
+        r2 
+    ]
+
+    # if !isnothing(force_values)
+    #     draws = force_values
+    # end
+
+    # prepare container for the new types
+    T = eltype(draws)
+    p_work = replace(Tunable(), prob.p, T.(tunable_ps))
+
+    # switch to the new drawn parameters
+    uncertain_setter!(p_work, draws)
+
+    # use the setter
+    # param_dict = Dict{Symbol, Number}(
+    #     :alpha_1 => alpha_1,
+    #     :alpha_2 => alpha_2,
+    #     :alpha_3 => alpha_3,
+    #     :alpha_4 => alpha_4,
+    #     :beta_1  => beta_1,
+    #     :beta_2  => beta_2,
+    #     :beta_3  => beta_3,
+    #     :beta_4  => beta_4,
+    #     :kx1     => kx1,
+    #     :nx1     => nx1,
+    #     :kx2     => kx2,
+    #     :nx2     => nx2,
+    #     :kr      => kr,
+    #     :nr      => nr,
+    #     :r1      => r1,
+    #     :r2      => r2,
+    #     :cuma => 2e-5 # manual
+    # )
 
     solve_opts = (dtmin=1e-12, saveat=saveat)
     
@@ -134,27 +244,46 @@ prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
         # param_dict = guesses
 
         # warm up
-        prob = remake(prob; p = param_dict)
-        warm = solve(prob, Rosenbrock23())
+        warm = solve(prob, Rosenbrock23(), p=p_work)
         # display(Plots.plot(warm))
+
+        # TODO - caching
+        # update u0 in p_work
+        warm_u0 = warm.u[end]
+        P = typeof(p_work).name.wrapper
+
+        pvec = getfield(p_work, 1)
+        u0_old   = getfield(p_work, 2)
+        f3       = getfield(p_work, 3)
+        f4       = getfield(p_work, 4)
+        f5       = getfield(p_work, 5)
+        f6       = getfield(p_work, 6)
+
+        u0_setter! = setu(ns, unknowns(ns))
+
+        # set u0
+        # TODO - cache the u0 types
+        T = eltype(warm_u0)
+        u0_work = similar(u0_old, T)
+        copyto!(u0_work, u0_old)
+        p_work = P(pvec, u0_work, f3, f4, f5, f6)
+        u0_setter!(p_work[2], warm_u0)
         
-        cdict = Dict(:cuma => 2e-5)
-        prob = remake(prob; p = cdict, u0=warm.u[end])
-        sol1 = solve(prob, Rosenbrock23(); solve_opts...)
+        # @show p_work
+        cuma_setter!(p_work, (2e-5, ))
+        sol1 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
         # display(Plots.plot(sol1))
 
-        cdict[:cuma] = 0.0001
-        prob = remake(prob; p = cdict, u0=warm.u[end])
-        sol2 = solve(prob, Rosenbrock23(); solve_opts...)
+        cuma_setter!(p_work, (0.0001, ))
+        sol2 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
 
-        cdict[:cuma] = 0.001
-        prob = remake(prob; p = cdict, u0=warm.u[end])
-        sol3 = solve(prob, Rosenbrock23(); solve_opts...)
+        cuma_setter!(p_work, (0.001, ))
+        sol3 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
         # display(Plots.plot(sol3))
-        
+
         data ~ MvNormal(vcat(sol1[1,:], sol2[1,:], sol3[1,:]), σ^2 * I)
     catch e
-        print(e)
+        # print(e)
         Turing.@addlogprob! -1e10
     end
 
@@ -171,36 +300,40 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time)
+model2 = fit(data_subset, prob, time)#, force_values=guesses_values)
 
 # Initilize parameters using results from the RPA paper
-init_params = Dict(
+# init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
+
+# init_params = Dict(
+#     :σ => 3.0,
+#     :draws => guesses_values,
+# )
+
+init_params = [
     :σ => 3.0,
     :alpha_1 => 83.4743,
-    :kx1 => 1.28e-8,
-    :nx1 => 2.34,
-    :beta_1 => 11.9586,
     :alpha_2 => 391.1627,
-    :kx2 => 36.4063,
-    :nx2 => 1.3,
-    :beta_2 => 3.9e-4,
-    :alpha_4 => 8.7519e6,
-    :kr => 0.51,
-    :nr => 3.2,
-    :beta_4 => 7.1347,
-    :r1 => 89.0635,
-    :r2 => 7.0188,
     :alpha_3 => 17.7437,
-    :beta_3 => 0.6644
-)
-
-# init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
+    :alpha_4 => 8.7519e6,
+    :beta_1  => 11.9586,
+    :beta_2  => 3.9e-4,
+    :beta_3  => 0.6644,
+    :beta_4  => 7.1347,
+    :kx1     => 1.28e-8,
+    :nx1     => 2.34,
+    :kx2     => 36.4063,
+    :nx2     => 1.3,
+    :kr      => 0.51,
+    :nr      => 3.2,
+    :r1      => 89.0635,
+    :r2      => 7.0188,
+]
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-
 chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
 
-f = open(string(@__DIR__)*"/minmtk_c2_corrected_u0_remake.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c8_nx1_rangeFrom1.jls", "w")
 serialize(f, chain_1)
 close(f)
