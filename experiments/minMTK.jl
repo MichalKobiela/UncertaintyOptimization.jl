@@ -21,7 +21,7 @@ Random.seed!(0);
 
 # Define a nonlinear system
 @variables A(t) B(t) 
-@parameters alpha_1 [tunable = true] 
+@parameters alpha_1 [tunable = true]
 @parameters alpha_2 [tunable = true]
 @parameters alpha_3 [tunable = true]
 @parameters alpha_4 [tunable = true]
@@ -41,19 +41,28 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
+# eqs = [
+#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
+#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+#     ]
 eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+          (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+          0.02 * r1 * max(A, 0)
+    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+          0.1 * r2 * max(B, 0)
     ]
+
 @mtkcompile ns = System(eqs, t)
 
 guesses = [
     alpha_1 => 83.4743,
-    alpha_2 => 391.1627,
+    alpha_2 => 20.0, # 391.1627,
     alpha_3 => 17.7437,
     alpha_4 => 8.7519e6,
     beta_1  => 11.9586,
@@ -72,7 +81,7 @@ guesses = [
 
 guesses_values = [
     83.4743, # alpha_1
-    391.1627, # alpha_2
+    20.0, # 391.1627, # alpha_2
     17.7437, # alpha_3
     8.7519e6, # alpha_4
     11.9586, # beta_1
@@ -95,28 +104,15 @@ u0 = [A => 24.0, B => 350.0]
 p = vcat(guesses, ps)
 prob = ODEProblem(ns, vcat(u0, p), (0.0, 10.0))
 
-## configure a setter
-# decide on the order of uncertain Symbol
-# we do cuma first because we want to be able to set it without changing everything else
-ordered_settable_symbols = (
-        # :cuma,
-        :alpha_1, 
-        :alpha_2,
-        :alpha_3,
-        :alpha_4,
-        :beta_1,
-        :beta_2,
-        :beta_3,
-        :beta_4,
-        :kx1,
-        :nx1,
-        :kx2,
-        :nx2,
-        :kr,
-        :nr,
-        :r1,
-        :r2,
-        )
+## settable symbols (tunables)
+# FIXME - grab tunables programmatically rather than this list,
+settable_symbols = (:alpha_1, :alpha_2, :alpha_3, :alpha_4, 
+                    :beta_1, :beta_2, :beta_3, :beta_4,
+                    :kx1, :nx1, :kx2, :nx2, :kr, :nr, :r1, :r2)
+
+# NOTE: the order of the settable symbols has to be taken from the MTK system
+
+ordered_settable_symbols
 
 # get the Nums for the setter
 multiparams_Nums = Vector{Num}(undef, length(ordered_settable_symbols))
@@ -150,63 +146,63 @@ tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
     σ ~ InverseGamma(2, 3)
 
     # draw uncertain
-    alpha_1 ~ Distributions.Uniform(0.0, 2000.0)
-    alpha_2 ~ Distributions.Uniform(0.0, 250.0)
-    alpha_3 ~ Distributions.Uniform(0.0, 1e4)
-    alpha_4 ~ Distributions.Uniform(0.0, 1e13)
-    beta_1 ~ Distributions.Uniform(0.0, 200.0)
-    beta_2 ~ Distributions.Uniform(0.0, 100.0)
-    beta_3 ~ Distributions.Uniform(0.0, 5e3)
-    beta_4 ~ Distributions.Uniform(0.0, 5000.0)
-    kx1 ~ Distributions.Uniform(0.0, 3e-8)
-    nx1 ~ Distributions.Uniform(1.0, 5.0)
-    kx2 ~ Distributions.Uniform(0.0, 1e4)
-    nx2 ~ Distributions.Uniform(1.0, 10.0)
-    kr ~ Distributions.Uniform(0.0, 100.0)
-    nr ~ Distributions.Uniform(1.0, 100.0)
-    r1 ~ Distributions.Uniform(0.0, 1000.0)
-    r2 ~ Distributions.Uniform(0.0, 1000.0)
+    # alpha_1 ~ Distributions.Uniform(0.0, 2000.0)
+    # alpha_2 ~ Distributions.Uniform(0.0, 250.0)
+    # alpha_3 ~ Distributions.Uniform(0.0, 1e4)
+    # alpha_4 ~ Distributions.Uniform(0.0, 1e13)
+    # beta_1 ~ Distributions.Uniform(0.0, 200.0)
+    # beta_2 ~ Distributions.Uniform(0.0, 100.0)
+    # beta_3 ~ Distributions.Uniform(0.0, 5e3)
+    # beta_4 ~ Distributions.Uniform(0.0, 5000.0)
+    # kx1 ~ Distributions.Uniform(0.0, 3e-8)
+    # nx1 ~ Distributions.Uniform(1.0, 5.0)
+    # kx2 ~ Distributions.Uniform(0.0, 1e4)
+    # nx2 ~ Distributions.Uniform(1.0, 10.0)
+    # kr ~ Distributions.Uniform(0.0, 100.0)
+    # nr ~ Distributions.Uniform(1.0, 100.0)
+    # r1 ~ Distributions.Uniform(0.0, 1000.0)
+    # r2 ~ Distributions.Uniform(0.0, 1000.0)
 
-    # draws ~ arraydist(collect((
-    #     Distributions.Uniform(0.0, 2000.0),
-    #     Distributions.Uniform(0.0, 250.0),
-    #     Distributions.Uniform(0.0, 1e4),
-    #     Distributions.Uniform(0.0, 1e13),
-    #     Distributions.Uniform(0.0, 200.0),
-    #     Distributions.Uniform(0.0, 100.0),
-    #     Distributions.Uniform(0.0, 5e3),
-    #     Distributions.Uniform(0.0, 5000.0),
-    #     Distributions.Uniform(0.0, 3e-8),
-    #     Distributions.Uniform(1.0, 5.0),
-    #     Distributions.Uniform(0.0, 1e4),
-    #     Distributions.Uniform(1.0, 10.0),
-    #     Distributions.Uniform(0.0, 100.0),
-    #     Distributions.Uniform(1.0, 100.0),
-    #     Distributions.Uniform(0.0, 1000.0),
-    #     Distributions.Uniform(0.0, 1000.0))))
+    draws ~ arraydist(collect((
+        Distributions.Uniform(0.0, 2000.0),
+        Distributions.Uniform(0.0, 250.0),
+        Distributions.Uniform(0.0, 1e4),
+        Distributions.Uniform(0.0, 1e13),
+        Distributions.Uniform(0.0, 200.0),
+        Distributions.Uniform(0.0, 100.0),
+        Distributions.Uniform(0.0, 5e3),
+        Distributions.Uniform(0.0, 5000.0),
+        Distributions.Uniform(0.0, 3e-8),
+        Distributions.Uniform(1.0, 5.0),
+        Distributions.Uniform(0.0, 1e4),
+        Distributions.Uniform(1.0, 10.0),
+        Distributions.Uniform(0.0, 100.0),
+        Distributions.Uniform(1.0, 100.0),
+        Distributions.Uniform(0.0, 1000.0),
+        Distributions.Uniform(0.0, 1000.0))))
 
-    draws = [
-        alpha_1 
-        alpha_2 
-        alpha_3 
-        alpha_4 
-        beta_1 
-        beta_2 
-        beta_3 
-        beta_4 
-        kx1 
-        nx1 
-        kx2 
-        nx2 
-        kr 
-        nr 
-        r1 
-        r2 
-    ]
+    # draws = [
+    #     alpha_1 
+    #     alpha_2 
+    #     alpha_3 
+    #     alpha_4 
+    #     beta_1 
+    #     beta_2 
+    #     beta_3 
+    #     beta_4 
+    #     kx1 
+    #     nx1 
+    #     kx2 
+    #     nx2 
+    #     kr 
+    #     nr 
+    #     r1 
+    #     r2 
+    # ]
 
-    # if !isnothing(force_values)
-    #     draws = force_values
-    # end
+    if !isnothing(force_values)
+        draws = force_values
+    end
 
     # prepare container for the new types
     T = eltype(draws)
@@ -236,15 +232,14 @@ tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
     #     :cuma => 2e-5 # manual
     # )
 
-    solve_opts = (dtmin=1e-12, saveat=saveat)
-    
     # Solve the ODE
     try
         # testing
         # param_dict = guesses
 
         # warm up
-        warm = solve(prob, Rosenbrock23(), p=p_work)
+        # FIXME - the dtmin is hardcoded here
+        warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12)
         # display(Plots.plot(warm))
 
         # TODO - caching
@@ -271,14 +266,14 @@ tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
         
         # @show p_work
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
+        sol1 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
+        sol2 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, Rosenbrock23(), p=p_work; solve_opts...)
+        sol3 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol3))
 
         data ~ MvNormal(vcat(sol1[1,:], sol2[1,:], sol3[1,:]), σ^2 * I)
@@ -305,35 +300,35 @@ model2 = fit(data_subset, prob, time)#, force_values=guesses_values)
 # Initilize parameters using results from the RPA paper
 # init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
 
-# init_params = Dict(
-#     :σ => 3.0,
-#     :draws => guesses_values,
-# )
-
-init_params = [
+init_params = Dict(
     :σ => 3.0,
-    :alpha_1 => 83.4743,
-    :alpha_2 => 391.1627,
-    :alpha_3 => 17.7437,
-    :alpha_4 => 8.7519e6,
-    :beta_1  => 11.9586,
-    :beta_2  => 3.9e-4,
-    :beta_3  => 0.6644,
-    :beta_4  => 7.1347,
-    :kx1     => 1.28e-8,
-    :nx1     => 2.34,
-    :kx2     => 36.4063,
-    :nx2     => 1.3,
-    :kr      => 0.51,
-    :nr      => 3.2,
-    :r1      => 89.0635,
-    :r2      => 7.0188,
-]
+    :draws => guesses_values,
+)
+
+# init_params = [
+#     3.0, # σ
+#     83.4743, # alpha_1
+#     20.0, # 391.1627, alpha_2
+#     17.7437, # alpha_3
+#     8.7519e6, # alpha_4
+#     11.9586, # beta_1
+#     3.9e-4, # beta_2
+#     0.6644, # beta_3
+#     7.1347, # beta_4
+#     1.28e-8, # kx1
+#     2.34, # nx1
+#     36.4063, # kx2
+#     1.3, # nx2
+#     0.51, # kr
+#     3.2, # nr
+#     89.0635, # r1
+#     7.0188, # r2
+# ]
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
 chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
 
-f = open(string(@__DIR__)*"/minmtk_c8_nx1_rangeFrom1.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c14_noExplicitTunables.jls", "w")
 serialize(f, chain_1)
 close(f)
