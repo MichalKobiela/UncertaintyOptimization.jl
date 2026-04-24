@@ -50,12 +50,12 @@ Random.seed!(0);
 #           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
 #     ]
 eqs = [
+    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+        0.02 * r1 * max(A, 0),
     D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
           (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-          0.1 * r2 * max(B, 0),
-    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-          0.02 * r1 * max(A, 0)
+          0.1 * r2 * max(B, 0)
     ]
 
 @mtkcompile ns = System(eqs, t)
@@ -66,7 +66,7 @@ ordered_params = [p for p in parameters(ns)]
 
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
-    :alpha_2 => 20.0, # 391.1627,
+    :alpha_2 => 391.1627, #  20.0, # 391.1627,
     :alpha_3 => 17.7437,
     :alpha_4 => 8.7519e6,
     :beta_1  => 11.9586,
@@ -116,7 +116,8 @@ prob = ODEProblem(ns, u0, (0.0, 10.0), init_params)
 all_tunables = ModelingToolkit.tunable_parameters(ns)
 
 # Only keep tunables that are actually in the parameter set
-tunable_params = intersect(ordered_params, all_tunables)
+tunable_set = Set(ModelingToolkit.tunable_parameters(ns))
+tunable_params = [p for p in parameters(ns) if p in tunable_set]
 
 # get the Nums for the setter
 multiparams_Nums = Vector{Num}(undef, length(tunable_params))
@@ -141,6 +142,9 @@ end
 
 tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
+state_order = unknowns(ns)
+A_idx = findfirst(isequal(A), state_order)
+B_idx = findfirst(isequal(B), state_order)
 
 # warm = solve(prob, Rosenbrock23())
 # # display(Plots.plot(sol))
@@ -154,10 +158,10 @@ tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 # display(Plots.plot(sol))
 
 
-@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions;
+@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions, ig;
     force_values=nothing)
 
-    σ ~ InverseGamma(2, 3)
+    σ ~ ig
 
     # draw uncertain
     # alpha_1 ~ Distributions.Uniform(0.0, 2000.0)
@@ -230,8 +234,9 @@ tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
         cuma_setter!(p_work, (0.001, ))
         sol3 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol3))
-
-        data ~ MvNormal(vcat(sol1[1,:], sol2[1,:], sol3[1,:]), σ^2 * I)
+        
+        # fixme - use 
+        data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
         # print(e)
         Turing.@addlogprob! -1e10
@@ -250,7 +255,7 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time, tunable_priors2)#, force_values=guesses_values)
+model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, force_values=guesses_values)
 
 # Initilize parameters using results from the RPA paper
 # init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
@@ -262,8 +267,15 @@ init_params = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
+chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params)
 
-f = open(string(@__DIR__)*"/minmtk_c17.jls", "w")
-serialize(f, chain_1)
+# rename the chain 
+rename_map = Dict(
+    Symbol("draws[$i]") => tunable_params[i].name
+    for i in eachindex(tunable_params)
+)
+chain_named = replacenames(chain_1, rename_map)
+
+f = open(string(@__DIR__)*"/minmtk_c22.jls", "w")
+serialize(f, chain_named)
 close(f)
