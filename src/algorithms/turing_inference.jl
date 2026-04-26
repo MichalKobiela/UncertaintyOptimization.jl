@@ -68,8 +68,15 @@ function run_inference(model::Model, spec::TuringSpec)
         progress=true,
         init_params=initial_params
     )
+
+
+    # rename the chain draws to the correct variables
+    rename_map = Dict(
+        Symbol("uncertain_sampled_values[$i]") => model.uncertain_param_symbols[i] for i in eachindex(model.uncertain_param_symbols)
+    )
+    chain_named = replacenames(chain, rename_map)
     
-    return chain
+    return chain_named
 end
 
 function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
