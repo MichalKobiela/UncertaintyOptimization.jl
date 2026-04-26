@@ -18,7 +18,7 @@ using Profile
 # using ProfileView
 # using StatProfilerHTML
 using StatsPlots
-using SciMLSensitivity
+# using SciMLSensitivity
 
 
 Random.seed!(0);
@@ -70,15 +70,11 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 3000,
+    n_samples = 3,
     n_chains = 1,
     # abstol and reltol? 
     solver = Rosenbrock23(),
-    # solver = AutoTsit5(Rosenbrock23()),
-#     solver = Tsit5(),
-#     solver = FBDF(),
-    # solver = Rodas5P(),
-    solver_opts = (dtmin=1e-12, dense=false, sensealg=ForwardDiffSensitivity(chunk_size=16))#, maxiters=100_000, reltol=1e-5, abstol=1e-7),
+    solver_opts = (dtmin=1e-12, ),
 )
 
 
@@ -93,9 +89,34 @@ chain = run_inference(model, spec)
 
 
 # plot(chain)
-f = open(string(@__DIR__)*"/posterior_try46_forward_sensitivity.jls", "w")
+f = open(string(@__DIR__)*"/posterior_try48_named_chains.jls", "w")
 serialize(f, chain)
 close(f)
+
+# sample 3 k samples
+
+# thompson sampling, grid search loss function
+# for each posterior sample check what is the best kx2 scaling factor
+function grid_loss (warmup, predicted)
+    # define the loss function using the outputs from warmup and predicted
+    adjusted_predicted = predicted[stateA, end] + background_fluorescence
+    ((warmup_y0[stateA, end] - 50).^2) + (adjusted_predicted - 50).^2/2
+end
+
+# function find_best 
+#     for scaling_factor:
+#         run_loss_function
+#         # problem: you cannot use simulate function, unless you make it more complex and add returning the warmup in it. 
+#         # also right now it runs 3 copies. But in the final test cuma is different, and we again
+# end
+
+
+
+# scan
+# kx2 modifier, in the yaml, scan multipliers
+# should we do this as part of the design? like in yaml: design: grid
+
+
 
 # chain2 = run_inference(model, spec)
 # f = open(string(@__DIR__)*"/posterior_samples_large_range_1_chain2_c11_r1.jls", "w")

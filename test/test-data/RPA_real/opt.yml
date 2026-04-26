@@ -117,6 +117,13 @@ parameters:
       upper: 1e4
     # role: design
     # bounds: [0.0, 1e4]
+    grid:
+      with:
+        cuma: 0.0003
+      scaling:
+        kx2: 
+          LinRange: [0.01, 3, 100]
+          reduce: min # find the smallest scaler
 
   nx2:
     value: 1.3
