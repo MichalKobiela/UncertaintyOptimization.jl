@@ -18,7 +18,7 @@ end
 # 10:kr, 11:kx1, 12:alpha_2, 13:alpha_1, 
 # 14:alpha_3, 15:beta_4
 
-chain_2 = open(string(@__DIR__)*"/minmtk_c2_corrected_u0_remake.jls", "r") do io
+chain_2 = open(string(@__DIR__)*"/posterior_try47_auto_max10k_rel1en2_abs1en3.jls", "r") do io
         deserialize(io)
 end
 

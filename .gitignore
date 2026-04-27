@@ -2,3 +2,7 @@
 /docs/Manifest*.toml
 /docs/build/
 /.vscode/
+*.jls
+*.pdf
+*.jlprof
+profiling
