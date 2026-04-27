@@ -119,11 +119,12 @@ parameters:
     # bounds: [0.0, 1e4]
     grid:
       with:
+        cuma_warmup: 
         cuma: 0.0003
       scaling:
         kx2: 
           LinRange: [0.01, 3, 100]
-          reduce: min # find the smallest scaler
+          reduce_loss: min # find the smallest scaler
 
   nx2:
     value: 1.3
