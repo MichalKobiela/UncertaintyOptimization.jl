@@ -70,16 +70,11 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 3000,
+    n_samples = 3,
     n_chains = 1,
     # abstol and reltol? 
-    # solver = Rosenbrock23(),
-    solver = AutoTsit5(Rosenbrock23()),
-#     solver = Tsit5(),
-#     solver = FBDF(),
-    # solver = Rodas5P(),
-    # solver_opts = (dtmin=1e-12, dense=false, sensealg=ForwardDiffSensitivity(chunk_size=16))#,
-    solver_opts = (dtmin=1e-9, dense=false, maxiters=2000, reltol=5e-2, abstol=1e-2),
+    solver = Rosenbrock23(),
+    solver_opts = (dtmin=1e-12, ),
 )
 
 
@@ -94,7 +89,7 @@ chain = run_inference(model, spec)
 
 
 # plot(chain)
-f = open(string(@__DIR__)*"/posterior_try49_auto_dtmin1en9_max2k_rel5en2_abs1en2.jls", "w")
+f = open(string(@__DIR__)*"/posterior_try50.jls", "w")
 serialize(f, chain)
 close(f)
 
@@ -102,16 +97,27 @@ close(f)
 
 # thompson sampling, grid search loss function
 # for each posterior sample check what is the best kx2 scaling factor
-function grid_loss (warmup, predicted)
+function grid_loss(warmup_sol, predicted_sol)
     # define the loss function using the outputs from warmup and predicted
-    adjusted_predicted = predicted[stateA, end] + background_fluorescence
-    ((warmup_y0[stateA, end] - 50).^2) + (adjusted_predicted - 50).^2/2
+    adjusted_predicted = predicted_sol[stateA, end] + background_fluorescence
+    warmup = warmup_sol[stateA, end]
+    
+    target = 50
+    (((warmup - target).^2) + (adjusted_predicted - target).^2) / 2
 end
 
-# function find_best
+# EP: there must be a grid loss search function, there must be a optimisation problem (find the minimum)
+# - global search (to cover both grid and gradient)
+# EP: use a spec to also support user defined spec / function
+# EP: pytorch, check how they abstracted optimisers, 
+# Spec - spec inheritance? 
+
+
+
+# function find_best 
 #     for scaling_factor:
 #         run_loss_function
-#         # problem: you cannot use simulate function, unless you make it more complex and add returning the warmup in it.
+#         # problem: you cannot use simulate function, unless you make it more complex and add returning the warmup in it. 
 #         # also right now it runs 3 copies. But in the final test cuma is different, and we again
 # end
 
