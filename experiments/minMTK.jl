@@ -147,6 +147,8 @@ cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
 # create a tunable
 tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
+# FIXME - check the order after canonicalize
+# it should be the same as manual list of parameters
 
 # prepare the list of distributions for drawing in the right order
 tunable_priors = Vector{Distribution}(undef, length(tunable_params))
@@ -203,8 +205,16 @@ B_idx = findfirst(isequal(B), state_order)
 
     # prepare container for the new types
     T = eltype(draws)
+
     # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
-    p_work = replace(Tunable(), prob.p, T.(tunable_ps))
+    right_types = T.(tunable_ps)
+    # @show right_types
+    p_work = replace(Tunable(), prob.p, right_types)
+    # TODO - consider adding cuma as tunable, this 
+    # means we won't be able to leak it here, 
+    # and therefore we won't need to separately set it to the original value each time we call this
+    # TODO - square how to use this with caching (but first benchmark if it's worth it)
+    # HOW TO SELECT u0: p_work = replace(Initials(), prob.p, right_types), this might avoid the manual rebuilding
 
     # switch to the new drawn parameters
     uncertain_setter!(p_work, draws)
