@@ -41,22 +41,35 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
-# eqs = [
-#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-#     ]
 eqs = [
+    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-        0.02 * r1 * max(A, 0),
-    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
-          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-          0.1 * r2 * max(B, 0)
+          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
     ]
+# eqs = [
+#     D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+#           (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+#           0.1 * r2 * max(B, 0),
+#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+#         (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+#         0.02 * r1 * max(A, 0),
+#     ]
+
+# this ordering change did not do anything
+# @named raw = ODESystem(
+#     eqs, 
+#     t, 
+#     [A, B], 
+#     [alpha_1, alpha_2, alpha_3, alpha_4,
+#     beta_1, beta_2, beta_3, beta_4,
+#     kx1, nx1, kx2, nx2, kr, nr, r1, r2,
+#     kcymRtot, kx3, cuma
+#     ]
+# )
+# ns2 = mtkcompile(raw)
 
 @mtkcompile ns = System(eqs, t)
 
@@ -109,7 +122,8 @@ u0 = [A => 24.0, B => 350.0]
 # 
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
-prob = ODEProblem(ns, u0, (0.0, 10.0), init_params)
+# try jac=true with simplify=true
+prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=true)
 
 ## settable symbols (tunables)
 # FIXME - grab tunables programmatically rather than this list,
@@ -189,6 +203,7 @@ B_idx = findfirst(isequal(B), state_order)
 
     # prepare container for the new types
     T = eltype(draws)
+    # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
     p_work = replace(Tunable(), prob.p, T.(tunable_ps))
 
     # switch to the new drawn parameters
@@ -197,6 +212,7 @@ B_idx = findfirst(isequal(B), state_order)
     # Solve the ODE
     try
         # warm up
+        cuma_setter!(p_work, (2e-6, ))
         # FIXME - the dtmin is hardcoded here
         warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12)
         # display(Plots.plot(warm))
@@ -218,6 +234,8 @@ B_idx = findfirst(isequal(B), state_order)
         # set u0
         # TODO - cache the u0 types
         T = eltype(warm_u0)
+        # note we never modify u0_old, therefore u0 is never leaking into the next iteration 
+        # and the warm up on the next call still uses the correct u0
         u0_work = similar(u0_old, T)
         copyto!(u0_work, u0_old)
         p_work = P(pvec, u0_work, f3, f4, f5, f6)
@@ -260,14 +278,14 @@ model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, for
 # Initilize parameters using results from the RPA paper
 # init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
 
-init_params = Dict(
+init_params_draws = Dict(
     :σ => 3.0,
     :draws => [guess_map[p.name] for p in tunable_params],
 )
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params)
+chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
 # rename the chain 
 rename_map = Dict(
@@ -276,6 +294,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c22.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c29.jls", "w")
 serialize(f, chain_named)
 close(f)
+
