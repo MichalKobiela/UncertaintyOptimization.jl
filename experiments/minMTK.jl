@@ -58,19 +58,6 @@ eqs = [
 #         0.02 * r1 * max(A, 0),
 #     ]
 
-# this ordering change did not do anything
-# @named raw = ODESystem(
-#     eqs, 
-#     t, 
-#     [A, B], 
-#     [alpha_1, alpha_2, alpha_3, alpha_4,
-#     beta_1, beta_2, beta_3, beta_4,
-#     kx1, nx1, kx2, nx2, kr, nr, r1, r2,
-#     kcymRtot, kx3, cuma
-#     ]
-# )
-# ns2 = mtkcompile(raw)
-
 @mtkcompile ns = System(eqs, t)
 
 # parameters of the system in the correct order
@@ -295,7 +282,7 @@ init_params_draws = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params_draws)
+chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
 
 # rename the chain 
 rename_map = Dict(
