@@ -101,7 +101,7 @@ parameters:
     role: uncertain
     prior:
       distribution: uniform
-      lower: 0.0
+      lower: 1.0
       upper: 5.0
 
   kcymRtot:
@@ -117,14 +117,13 @@ parameters:
       upper: 1e4
     # role: design
     # bounds: [0.0, 1e4]
-    grid:
-      with:
-        cuma_warmup: 
-        cuma: 0.0003
-      scaling:
-        kx2: 
-          LinRange: [0.01, 3, 100]
-          reduce_loss: min # find the smallest scaler
+    design:
+      parameters:
+        cuma:
+          warmup_value: 2e-6
+          value: 0.0003
+      opt:
+        range: [0.01, 3]
 
   nx2:
     value: 1.3
