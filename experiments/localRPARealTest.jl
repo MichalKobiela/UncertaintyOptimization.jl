@@ -97,7 +97,7 @@ close(f)
 
 # thompson sampling, grid search loss function
 # for each posterior sample check what is the best kx2 scaling factor
-function grid_loss(warmup_sol, predicted_sol)
+function loss(warmup_sol, predicted_sol)
     # define the loss function using the outputs from warmup and predicted
     adjusted_predicted = predicted_sol[stateA, end] + background_fluorescence
     warmup = warmup_sol[stateA, end]
@@ -105,6 +105,25 @@ function grid_loss(warmup_sol, predicted_sol)
     target = 50
     (((warmup - target).^2) + (adjusted_predicted - target).^2) / 2
 end
+
+# 
+run_design(model, chains, loss)
+
+function foo(x)
+    z = 0
+    x + z
+    # println("hello")
+end
+
+x = [1, 2, 3]
+function sum_elements()
+    s = 0
+    for val in x
+        s += val
+    end
+    return s
+end
+
 
 # EP: there must be a grid loss search function, there must be a optimisation problem (find the minimum)
 # - global search (to cover both grid and gradient)
