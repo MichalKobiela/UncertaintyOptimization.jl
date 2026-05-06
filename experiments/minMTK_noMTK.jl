@@ -68,6 +68,8 @@ eqs = [
 # which we are going to use for all operations
 ordered_params = [p for p in parameters(sys)]
 
+@show ordered_params
+
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
     :alpha_2 => 391.1627, #  20.0, # 391.1627,
@@ -109,7 +111,7 @@ prior_map = Dict{Symbol,Distribution}(
     :r2      => Uniform(0.0, 1000.0),
 )
 
-u0 = [A => 24.0, B => 350.0]
+u0_map = [A => 24.0, B => 350.0]
 # 
 init_params_values = [guess_map[p.name] for p in ordered_params]
 
@@ -128,7 +130,7 @@ J_oop, J_ip = build_function(J, sts, ps, iv; expression = Val(false))
 f = ODEFunction(f_ip; jac = J_ip)
 # f = ODEFunction(f_ip)
 
-u0 = [24.0, 350.0]
+u0 = [u0_map[s] for s in sts]
 p0 = [guess_map[p.name] for p in ordered_params]
 prob = ODEProblem(f, u0, (0.0, 10.0), p0)
 
@@ -168,16 +170,18 @@ B_idx = findfirst(isequal(ns.B), state_order)
 
 params = copy(init_params_values)
 
+cuma_idx = findfirst(isequal(cuma), ordered_params)
+
 # @show prob
 # warm = solve(prob, Rosenbrock23(), p=params, u0=u0; dtmin=1e-12)
 # display(Plots.plot(warm))
 
-# params[findfirst(isequal(cuma), ordered_params)] = 2e-5
+# params[cuma_idx] = 2e-5
 # prob_1 = remake(prob; p = params, u0=warm[end])
 # sol = solve(prob_1, Rosenbrock23())
 # display(Plots.plot(sol))
 
-# params[findfirst(isequal(cuma), ordered_params)] = 0.001
+# params[cuma_idx] = 0.001
 # prob_1 = remake(prob; p = params, u0=warm[end])
 # sol = solve(prob_1, Rosenbrock23())
 # display(Plots.plot(sol))
@@ -202,67 +206,62 @@ params = copy(init_params_values)
     p_work = T.(prob.p)
     p_work[1:length(draws)] .= draws
 
-    try
+    # try
         warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12, dense=false)
-        # display(Plots.plot(warm))
+        warm_u0 = warm.u[end]
 
-        prod_prob = remake(prob; tspan=(0.0, 5.45))
-
-        cuma_idx = findfirst(isequal(cuma), ordered_params)
-        
         p_work[cuma_idx] = 2e-5
-        sol1 = solve(prod_prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
+        sol1 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
         # display(Plots.plot(sol1))
 
         p_work[cuma_idx] = 0.0001
-        sol2 = solve(prod_prob, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
+        sol2 = solve(prob, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
 
         p_work[cuma_idx] = 0.001
-        sol3 = solve(prod_probpro, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
+        sol3 = solve(prob, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
         # display(Plots.plot(sol3))
         
-        # fixme - use 
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
-    catch e
+    # catch e
         print(e)
         Turing.@addlogprob! -1e10
-    end
+    # end
 
     return nothing
 end
 
-# time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
-#         DataFrame)[!,1]
-# data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
-#         DataFrame))
-# background_fluorescence = 17.6
-# data = data .- background_fluorescence
-# # select specific modelled data
-# data_subset = vcat(data[:,2], data[:,5], data[:,9])
+time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
+        DataFrame)[!,1]
+data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
+        DataFrame))
+background_fluorescence = 17.6
+data = data .- background_fluorescence
+# select specific modelled data
+data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-# model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, force_values=guesses_values)
+model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, force_values=guesses_values)
 
-# # Initilize parameters using results from the RPA paper
-# # init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
+# Initilize parameters using results from the RPA paper
+# init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
 
-# init_params_draws = Dict(
-#     :σ => 3.0,
-#     :draws => [guess_map[p.name] for p in tunable_params],
-# )
+init_params_draws = Dict(
+    :σ => 3.0,
+    :draws => [guess_map[p.name] for p in tunable_params],
+)
 
-# Random.seed!(4)
-# nuts = NUTS(0.65,init_ϵ = 0.001)
-# chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
+Random.seed!(4)
+nuts = NUTS(0.65,init_ϵ = 0.001)
+chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
 
-# # rename the chain 
-# rename_map = Dict(
-#     Symbol("draws[$i]") => tunable_params[i].name
-#     for i in eachindex(tunable_params)
-# )
-# chain_named = replacenames(chain_1, rename_map)
+# rename the chain 
+rename_map = Dict(
+    Symbol("draws[$i]") => tunable_params[i].name
+    for i in eachindex(tunable_params)
+)
+chain_named = replacenames(chain_1, rename_map)
 
-# f = open(string(@__DIR__)*"/minmtk_noMtk1.jls", "w")
-# serialize(f, chain_named)
-# close(f)
+f = open(string(@__DIR__)*"/minmtk_noMtk1.jls", "w")
+serialize(f, chain_named)
+close(f)
 
