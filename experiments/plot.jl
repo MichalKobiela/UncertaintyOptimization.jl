@@ -5,9 +5,10 @@ using SymbolicIndexingInterface
 using Random
 using Serialization
 using StatsPlots
+using Plots.Measures: mm
 
 #open the chains
-chain = open(string(@__DIR__)*"/minmtk_c27_jac0_reproduced.jls", "r") do io
+chain_1 = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") do io
         deserialize(io)
 end
 
@@ -28,7 +29,7 @@ symbols = [:nx2, :beta_1, :beta_2, :alpha_4,
  :kr, :kx1, :alpha_2, :alpha_1, 
  :alpha_3, :beta_4]
 
-chain_2 = open(string(@__DIR__)*"/minmtk_c30_profiling.jls", "r") do io
+chain_2 = open(string(@__DIR__)*"/minmtk_c27_jac0_reproduced.jls", "r") do io
         deserialize(io)
 end
 
@@ -36,8 +37,33 @@ end
 #         deserialize(io)
 # end
 
-StatsPlots.plot(chain[symbols])
-StatsPlots.plot(chain_2[symbols])
+
+# build the overlaid plots
+plots = []
+for (i, s) in enumerate(symbols)
+    show_legend = (i == 1)
+
+    # Plot the first chain
+    p = plot(chain_1, s, label="Original", color=:navy, legend=show_legend)
+    
+    # Overlay the second chain on the SAME axes
+    # Note: StatsPlots recipes for 'plot!' are smart enough to overlay 
+    # both the trace and the density correctly.
+    plot!(p, chain_2, s, label="MinMTK", color=:orangered, alpha=0.7, legend=show_legend)
+    
+    push!(plots, p)
+end
+
+# Assemble the final grid
+plot(plots..., 
+    layout = (length(symbols), 1), 
+    size = (900, 3000), 
+    left_margin = 25mm, # Increased slightly for safety
+    bottom_margin = 2mm
+)
+
+# StatsPlots.plot(chain_2[symbols])
+# StatsPlots.plot(chain_2[symbols])
 # StatsPlots.plot!(chain_3)
 
 # Increased burnout for better mixing
