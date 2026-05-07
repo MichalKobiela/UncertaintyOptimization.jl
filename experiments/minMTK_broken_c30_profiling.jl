@@ -166,9 +166,6 @@ B_idx = findfirst(isequal(B), state_order)
 
     draws ~ distributions
     p_work = replace(Tunable(), prob.p, draws)
-
-    # FIXME - hard coded initials
-    replace!(Initials(), p_work, (24.0, 350.0))
     
     cuma_setter!(p_work, (2e-6, ))
     # FIXME - the dtmin is hardcoded here
@@ -252,7 +249,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_brokenc30_repeated_noprofiling.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_brokenc30_repeated_noprofiling_SetInitCorrected.jls", "w")
 serialize(f, chain_named)
 close(f)
 
