@@ -136,6 +136,7 @@ prob = ODEProblem(f, u0, (0.0, 10.0), p0)
 
 
 init_params_values = [guess_map[p.name] for p in ordered_ps]
+fixed_params_values = [guess_map[p.name] for p in fixed_params]
 
 # get the Nums for the setter
 # multiparams_Nums = Vector{Num}(undef, length(tunable_params))
@@ -152,7 +153,7 @@ init_params_values = [guess_map[p.name] for p in ordered_ps]
 #     tunable_priors[i] = prior_map[param.name]
 # end
 
-# tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
+tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
 state_order = unknowns(sys)
 A_idx = findfirst(isequal(sys.A), state_order)
@@ -187,33 +188,33 @@ cuma_idx = findfirst(isequal(cuma), ordered_ps)
 
     draws ~ distributions
 
-    if !isnothing(force_values)
-        draws = force_values
-    end
+    # if !isnothing(force_values)
+    #     draws = force_values
+    # end
 
-    T = eltype(draws)
-    p_work = T.(prob.p)
+    # extend draws with fixed params
+    T = typeof(draws[1])
+    p_work = Vector{T}(undef, length(ordered_ps))
     p_work[1:length(draws)] .= draws
+    p_work[length(draws)+1:end] .= T.(fixed_params_values)
 
     try
-        warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12, dense=false)
-        
-        warm_u0 = warm.u[end]
+        warm = solve(prob, Rosenbrock23(), p=p_work, u0=u0, dtmin=1e-12, dense=false)
+        warm_u0 = warm[end]
 
         p_work[cuma_idx] = 2e-5
         sol1 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
         # display(Plots.plot(sol1))
 
         p_work[cuma_idx] = 0.0001
-        sol2 = solve(prob, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
+        sol2 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
 
         p_work[cuma_idx] = 0.001
-        sol3 = solve(prob, Rosenbrock23(); p=p_work, dtmin=1e-12, saveat=saveat, dense=false)
-        # display(Plots.plot(sol3))
+        sol3 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
         
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
-        print(e)
+        # print(e)
         Turing.@addlogprob! -1e10
     end
 
