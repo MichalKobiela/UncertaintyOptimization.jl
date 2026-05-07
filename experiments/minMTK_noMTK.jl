@@ -64,12 +64,6 @@ eqs = [
 # @mtkcompile ns = System(eqs, t)
 @named sys = System(eqs, t)
 
-# parameters of the system in the correct order
-# which we are going to use for all operations
-ordered_params = [p for p in parameters(sys)]
-
-@show ordered_params
-
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
     :alpha_2 => 391.1627, #  20.0, # 391.1627,
@@ -111,36 +105,37 @@ prior_map = Dict{Symbol,Distribution}(
     :r2      => Uniform(0.0, 1000.0),
 )
 
-u0_map = [A => 24.0, B => 350.0]
-# 
-init_params_values = [guess_map[p.name] for p in ordered_params]
-
 rhss = [eq.rhs for eq in equations(sys)]
 sts   = unknowns(sys)
-ps   = parameters(sys)
+ps_unordered   = parameters(sys)
 iv   = ModelingToolkit.get_iv(sys) # Usually 't'
+
+# Only keep tunables that are actually in the parameter set
+tunable_set = Set(ModelingToolkit.tunable_parameters(sys))
+tunable_params = [p for p in parameters(sys) if p in tunable_set]
+fixed_params = [p for p in parameters(sys) if p ∉ tunable_set]
+
+# tunable first, fixed later
+ordered_ps = [tunable_params; fixed_params]
 
 # Call build_function on the VECTOR of expressions
 # This version is guaranteed to return (f_oop, f_ip)
-f_oop, f_ip = build_function(rhss, sts, ps, iv; expression = Val{false})
+f_oop, f_ip = build_function(rhss, sts, ordered_ps, iv; expression = Val{false})
 
 J = ModelingToolkit.jacobian(rhss, sts)
-J_oop, J_ip = build_function(J, sts, ps, iv; expression = Val(false))
+J_oop, J_ip = build_function(J, sts, ordered_ps, iv; expression = Val(false))
 
 f = ODEFunction(f_ip; jac = J_ip)
 # f = ODEFunction(f_ip)
 
+u0_map = Dict(A => 24.0, B => 350.0)
+
 u0 = [u0_map[s] for s in sts]
-p0 = [guess_map[p.name] for p in ordered_params]
+p0 = [guess_map[p.name] for p in ordered_ps]
 prob = ODEProblem(f, u0, (0.0, 10.0), p0)
 
-## settable symbols (tunables)
-# FIXME - grab tunables programmatically rather than this list,
-# all_tunables = ModelingToolkit.tunable_parameters(ns)
 
-# Only keep tunables that are actually in the parameter set
-# tunable_set = Set(ModelingToolkit.tunable_parameters(ns))
-# tunable_params = [p for p in parameters(ns) if p in tunable_set]
+init_params_values = [guess_map[p.name] for p in ordered_ps]
 
 # get the Nums for the setter
 # multiparams_Nums = Vector{Num}(undef, length(tunable_params))
@@ -151,11 +146,6 @@ prob = ODEProblem(f, u0, (0.0, 10.0), p0)
 # cuma setter
 # cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
-# create a tunable
-# tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
-# FIXME - check the order after canonicalize
-# it should be the same as manual list of parameters
-
 # prepare the list of distributions for drawing in the right order
 # tunable_priors = Vector{Distribution}(undef, length(tunable_params))
 # for (i, param) in enumerate(tunable_params)
@@ -164,15 +154,14 @@ prob = ODEProblem(f, u0, (0.0, 10.0), p0)
 
 # tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
-state_order = unknowns(ns)
-A_idx = findfirst(isequal(ns.A), state_order)
-B_idx = findfirst(isequal(ns.B), state_order)
+state_order = unknowns(sys)
+A_idx = findfirst(isequal(sys.A), state_order)
+B_idx = findfirst(isequal(sys.B), state_order)
 
 params = copy(init_params_values)
 
-cuma_idx = findfirst(isequal(cuma), ordered_params)
+cuma_idx = findfirst(isequal(cuma), ordered_ps)
 
-# @show prob
 # warm = solve(prob, Rosenbrock23(), p=params, u0=u0; dtmin=1e-12)
 # display(Plots.plot(warm))
 
@@ -206,8 +195,9 @@ cuma_idx = findfirst(isequal(cuma), ordered_params)
     p_work = T.(prob.p)
     p_work[1:length(draws)] .= draws
 
-    # try
+    try
         warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12, dense=false)
+        
         warm_u0 = warm.u[end]
 
         p_work[cuma_idx] = 2e-5
@@ -222,10 +212,10 @@ cuma_idx = findfirst(isequal(cuma), ordered_params)
         # display(Plots.plot(sol3))
         
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
-    # catch e
+    catch e
         print(e)
         Turing.@addlogprob! -1e10
-    # end
+    end
 
     return nothing
 end
