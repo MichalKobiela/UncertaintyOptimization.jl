@@ -43,22 +43,13 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
-# eqs = [
-#         D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-#     ,
-#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-# ]
 eqs = [
+    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-        0.02 * r1 * max(A, 0),
-    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
-          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-          0.1 * r2 * max(B, 0),
+          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
     ]
 
 # @mtkcompile ns = System(eqs, t)
@@ -156,8 +147,11 @@ fixed_params_values = [guess_map[p.name] for p in fixed_params]
 tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
 state_order = unknowns(sys)
-A_idx = findfirst(isequal(sys.A), state_order)
-B_idx = findfirst(isequal(sys.B), state_order)
+# `@named sys = System(...)` namespaces accessors such as `sys.A`, but
+# `unknowns(sys)` returns the bare symbols.  Index by the bare symbols so the
+# no-MTK problem observes the same physical state as the compiled MTK problem.
+A_idx = findfirst(isequal(A), state_order)
+B_idx = findfirst(isequal(B), state_order)
 
 params = copy(init_params_values)
 
@@ -188,9 +182,9 @@ cuma_idx = findfirst(isequal(cuma), ordered_ps)
 
     draws ~ distributions
 
-    # if !isnothing(force_values)
-    #     draws = force_values
-    # end
+    if !isnothing(force_values)
+        draws = force_values
+    end
 
     # extend draws with fixed params
     T = typeof(draws[1])
@@ -243,7 +237,7 @@ init_params_draws = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
+chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
 # rename the chain 
 rename_map = Dict(
@@ -252,7 +246,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_noMtk1.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_noMtk_full1.jls", "w")
 serialize(f, chain_named)
 close(f)
 
