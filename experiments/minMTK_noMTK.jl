@@ -17,6 +17,11 @@ using DataFrames
 using Distributions
 using Symbolics
 # using DistributionsAD
+using BenchmarkTools
+using ForwardDiff
+using ForwardDiff: Dual
+using DynamicPPL
+
 
 
 Random.seed!(0);
@@ -43,17 +48,28 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
+# eqs = [
+#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
+#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+#     ]
+
 eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
+    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+        (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+        0.1 * r2 * max(B, 0),
     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-    ]
+        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+        0.02 * r1 * max(A, 0)
+]
 
 # @mtkcompile ns = System(eqs, t)
+# @named sys = System(eqs, t)
 @named sys = System(eqs, t)
+sys = structural_simplify(sys)
 
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
@@ -109,21 +125,26 @@ fixed_params = [p for p in parameters(sys) if p ∉ tunable_set]
 # tunable first, fixed later
 ordered_ps = [tunable_params; fixed_params]
 
+rhss = Symbolics.simplify.(rhss)
+
 # Call build_function on the VECTOR of expressions
 # This version is guaranteed to return (f_oop, f_ip)
-f_oop, f_ip = build_function(rhss, sts, ordered_ps, iv; expression = Val{false})
+f_oop, f_ip = build_function(rhss, sts, ordered_ps, iv; expression = Val{false}, cse=true)#, force_SA=true)
 
 J = ModelingToolkit.jacobian(rhss, sts)
-J_oop, J_ip = build_function(J, sts, ordered_ps, iv; expression = Val(false))
+# J = Symbolics.simplify.(ModelingToolkit.jacobian(Symbolics.simplify.(rhss), sts))
+# J = Symbolics.simplify.(J)
+J_oop, J_ip = build_function(J, sts, ordered_ps, iv; expression = Val(false), cse=true)
 
-f = ODEFunction(f_ip; jac = J_ip)
+# f = ODEFunction(f_ip, jac = J_ip)
+f = ODEFunction{false, SciMLBase.FullSpecialize}(f_oop, jac = J_oop)
 # f = ODEFunction(f_ip)
 
 u0_map = Dict(A => 24.0, B => 350.0)
 
 u0 = [u0_map[s] for s in sts]
 p0 = [guess_map[p.name] for p in ordered_ps]
-prob = ODEProblem(f, u0, (0.0, 10.0), p0)
+prob = ODEProblem{false, SciMLBase.FullSpecialize}(f, u0, (0.0, 10.0), p0)
 
 
 init_params_values = [guess_map[p.name] for p in ordered_ps]
@@ -156,6 +177,31 @@ B_idx = findfirst(isequal(B), state_order)
 params = copy(init_params_values)
 
 cuma_idx = findfirst(isequal(cuma), ordered_ps)
+
+# test_duals = ForwardDiff.Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}, Float64, 9}[
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8471.275872497094,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # alpha_3
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(3892.1280967413495,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # beta_3
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(38.1521059537882,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # beta_2
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.403823873189367,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # nx1
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(7.082621328112331e12,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # alpha_4
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.107440364099724,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # nx2
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(89.59331280378838,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # alpha_2
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8192.21592651675,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # kx2
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(129.10938198655745,45.763219401803426,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # beta_1
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(741.4056646388501,0.0,191.72330508027503,0.0,0.0,0.0,0.0,0.0,0.0,0.0), # r1
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(6.7229240948540025e-9,0.0,0.0,5.216333815348385e-9,0.0,0.0,0.0,0.0,0.0,0.0), # kx1
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(144.30022394185826,0.0,0.0,0.0,123.47766931218781,0.0,0.0,0.0,0.0,0.0), # r2
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(20.995283540748407,0.0,0.0,0.0,0.0,16.5872642311842,0.0,0.0,0.0,0.0), # kr
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(228.78673067134994,0.0,0.0,0.0,0.0,0.0,202.61504660570753,0.0,0.0,0.0), # alpha_1
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(68.86082154078191,0.0,0.0,0.0,0.0,0.0,0.0,21.344749821692513,0.0,0.0), # nr
+#     Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(947.5046140951508,0.0,0.0,0.0,0.0,0.0,0.0,0.0,767.9516153488307,0.0),# beta_4
+# ]
+# T = eltype(test_duals)
+# push!(test_duals, T(guess_map[:kcymRtot]))
+# push!(test_duals, T(guess_map[:cuma]))
+# push!(test_duals, T(guess_map[:kx3]))
+# results = @benchmark solve(prob, Rosenbrock23(autodiff = false), p=test_duals, u0=u0; dtmin=1e-12)
+# show(stdout, MIME"text/plain"(), results)
 
 # warm = solve(prob, Rosenbrock23(), p=params, u0=u0; dtmin=1e-12)
 # display(Plots.plot(warm))
@@ -193,18 +239,18 @@ cuma_idx = findfirst(isequal(cuma), ordered_ps)
     p_work[length(draws)+1:end] .= T.(fixed_params_values)
 
     try
-        warm = solve(prob, Rosenbrock23(), p=p_work, u0=u0, dtmin=1e-12, dense=false)
+        warm = solve(prob, Rosenbrock23(autodiff = false), p=p_work, u0=u0, dtmin=1e-12, dense=false)
         warm_u0 = warm[end]
 
         p_work[cuma_idx] = 2e-5
-        sol1 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
+        sol1 = solve(prob, Rosenbrock23(autodiff = false); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
         # display(Plots.plot(sol1))
 
         p_work[cuma_idx] = 0.0001
-        sol2 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
+        sol2 = solve(prob, Rosenbrock23(autodiff = false); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
 
         p_work[cuma_idx] = 0.001
-        sol3 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
+        sol3 = solve(prob, Rosenbrock23(autodiff = false); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat, dense=false)
         
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
@@ -227,16 +273,14 @@ data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, force_values=guesses_values)
 
-# Initilize parameters using results from the RPA paper
-# init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
-
 init_params_draws = Dict(
     :σ => 3.0,
     :draws => [guess_map[p.name] for p in tunable_params],
 )
 
 Random.seed!(4)
-nuts = NUTS(0.65,init_ϵ = 0.001)
+nuts = NUTS(0.55,init_ϵ = 0.003)
+# adtype = AutoForwardDiff(chunksize = 17)
 chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
 # rename the chain 
@@ -246,7 +290,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_noMtk_full1.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_noMtk_full5_500usDuals_simrhss.jls", "w")
 serialize(f, chain_named)
 close(f)
 
