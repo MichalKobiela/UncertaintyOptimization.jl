@@ -51,14 +51,23 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
+# eqs = [
+#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
+#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+#     ]
+
 eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-    ]
+            D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+            (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+            0.1 * r2 * max(B, 0),
+        D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+            (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+            0.02 * r1 * max(A, 0)
+]
 
 @mtkcompile ns = System(eqs, t)
 
@@ -152,7 +161,11 @@ state_order = unknowns(ns)
 A_idx = findfirst(isequal(A), state_order)
 B_idx = findfirst(isequal(B), state_order)
 
-# warm = solve(prob, Rosenbrock23())
+results = @benchmark solve(prob, Rosenbrock23(); dtmin=1e-12)
+show(stdout, MIME"text/plain"(), results)
+
+
+
 # # display(Plots.plot(sol))
 
 # prob_1 = remake(prob; p = Dict(:cuma => 2e-5), u0=warm[end])
@@ -312,11 +325,11 @@ function perffit(prob, saveat::AbstractVector;
     return [sol1, sol2, sol3]
 end
 
-init_params_duals = ForwardDiff.Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}, Float64, 9}[Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8471.275872497094,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(3892.1280967413495,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(38.1521059537882,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.403823873189367,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(7.082621328112331e12,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.107440364099724,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(89.59331280378838,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8192.21592651675,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(129.10938198655745,45.763219401803426,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(741.4056646388501,0.0,191.72330508027503,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(6.7229240948540025e-9,0.0,0.0,5.216333815348385e-9,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(144.30022394185826,0.0,0.0,0.0,123.47766931218781,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(20.995283540748407,0.0,0.0,0.0,0.0,16.5872642311842,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(228.78673067134994,0.0,0.0,0.0,0.0,0.0,202.61504660570753,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(68.86082154078191,0.0,0.0,0.0,0.0,0.0,0.0,21.344749821692513,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(947.5046140951508,0.0,0.0,0.0,0.0,0.0,0.0,0.0,767.9516153488307,0.0)]
-init_params_values = [guess_map[p.name] for p in ordered_params]
+# init_params_duals = ForwardDiff.Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}, Float64, 9}[Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8471.275872497094,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(3892.1280967413495,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(38.1521059537882,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.403823873189367,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(7.082621328112331e12,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(2.107440364099724,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(89.59331280378838,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(8192.21592651675,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(129.10938198655745,45.763219401803426,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(741.4056646388501,0.0,191.72330508027503,0.0,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(6.7229240948540025e-9,0.0,0.0,5.216333815348385e-9,0.0,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(144.30022394185826,0.0,0.0,0.0,123.47766931218781,0.0,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(20.995283540748407,0.0,0.0,0.0,0.0,16.5872642311842,0.0,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(228.78673067134994,0.0,0.0,0.0,0.0,0.0,202.61504660570753,0.0,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(68.86082154078191,0.0,0.0,0.0,0.0,0.0,0.0,21.344749821692513,0.0,0.0), Dual{ForwardDiff.Tag{DynamicPPL.DynamicPPLTag, Float64}}(947.5046140951508,0.0,0.0,0.0,0.0,0.0,0.0,0.0,767.9516153488307,0.0)]
+# init_params_values = [guess_map[p.name] for p in ordered_params]
 # perffit(prob, time, force_values=init_params_values)
-results = @benchmark perffit(prob, time, force_values=init_params_duals)
-show(stdout, MIME"text/plain"(), results)
+# results = @benchmark perffit(prob, time, force_values=init_params_duals)
+# show(stdout, MIME"text/plain"(), results)
 
 
 # time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
