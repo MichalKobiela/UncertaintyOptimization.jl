@@ -15,11 +15,9 @@ using DataFrames
 using Distributions
 # using DistributionsAD
 using SciMLSensitivity
-using ADTypes: AutoReverseDiff
 
-# const SOLVER = Rosenbrock23()
+const SOLVER = Rosenbrock23()
 const SENSEALG = ForwardSensitivity()
-const SOLVER = Rodas5P()
 
 Random.seed!(0);
 
@@ -46,22 +44,22 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
-eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-    ]
 # eqs = [
-#     D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
-#           (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-#           0.1 * r2 * max(B, 0),
+#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
 #     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-#         (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-#         0.02 * r1 * max(A, 0),
+#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
 #     ]
+eqs = [
+    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+          0.1 * r2 * max(B, 0),
+    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+        0.02 * r1 * max(A, 0),
+    ]
 
 @mtkcompile ns = System(eqs, t)
 
@@ -114,7 +112,7 @@ u0 = [A => 24.0, B => 350.0]
 # 
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
-# try jac=true with simplify=true
+# keep the same primal problem as in minMTK.jl and only change the sensitivity method
 prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
 
 ## settable symbols (tunables)
@@ -151,8 +149,8 @@ end
 tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
 state_order = unknowns(ns)
-A_idx = findfirst(isequal(ns.A), state_order)
-B_idx = findfirst(isequal(ns.B), state_order)
+A_idx = findfirst(isequal(A), state_order)
+B_idx = findfirst(isequal(B), state_order)
 
 # warm = solve(prob, Rosenbrock23())
 # # display(Plots.plot(sol))
@@ -172,6 +170,8 @@ B_idx = findfirst(isequal(ns.B), state_order)
     σ ~ ig
 
     draws ~ distributions
+
+    @show draws
 
     if !isnothing(force_values)
         draws = force_values
@@ -198,7 +198,7 @@ B_idx = findfirst(isequal(ns.B), state_order)
         # warm up
         cuma_setter!(p_work, (2e-6, ))
         # FIXME - the dtmin is hardcoded here
-        warm = solve(prob, SOLVER(), p=p_work, dtmin=1e-12, sensealg=SENSEALG)
+        warm = solve(prob, SOLVER, p=p_work, dtmin=1e-12, sensealg=SENSEALG)
         # display(Plots.plot(warm))
 
         # TODO - caching
@@ -227,14 +227,14 @@ B_idx = findfirst(isequal(ns.B), state_order)
         
         # @show p_work
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, SOLVER(), p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
+        sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
         # display(Plots.plot(sol1))
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, SOLVER(), p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
+        sol2 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, SOLVER(), p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
+        sol3 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
         # display(Plots.plot(sol3))
         
         # fixme - use 
@@ -269,7 +269,7 @@ init_params_draws = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3000, 1, init_params = init_params_draws, adtype = AutoReverseDiff())
+chain_1 = sample(model2, nuts , MCMCSerial(), 20, 1, init_params = init_params_draws)
 
 # rename the chain 
 rename_map = Dict(
@@ -278,7 +278,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c35-forwardsense-Rodas5P.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_forwardSensitivity_matching_minMTK_noadback_tests.jls", "w")
 serialize(f, chain_named)
 close(f)
 
