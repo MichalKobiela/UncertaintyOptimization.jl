@@ -18,6 +18,8 @@ using AdvancedHMC: DenseEuclideanMetric
 
 Random.seed!(0);
 
+const SOLVER = AutoTsit5(Rosenbrock23())
+
 
 # Define a nonlinear system
 @variables A(t) B(t) 
@@ -211,7 +213,7 @@ B_idx = findfirst(isequal(B), state_order)
         # warm up
         cuma_setter!(p_work, (2e-6, ))
         # FIXME - the dtmin is hardcoded here
-        warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12)
+        warm = solve(prob, SOLVER, p=p_work, dtmin=1e-12)
         # display(Plots.plot(warm))
 
         # TODO - caching
@@ -240,14 +242,14 @@ B_idx = findfirst(isequal(B), state_order)
         
         # @show p_work
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol2 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol3 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol3))
         
         # fixme - use 
@@ -295,7 +297,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c46_nuts0.5_e0.003_DEM.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23.jls", "w")
 serialize(f, chain_named)
 close(f)
 
