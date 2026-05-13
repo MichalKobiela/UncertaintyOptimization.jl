@@ -1,37 +1,30 @@
-using Revise
-# avoid issues of world-age
-using ModelingToolkit, RuntimeGeneratedFunctions
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D;
+# using Revise
 using OrdinaryDiffEq
 using CSV, Tables
 using Turing
-using SciMLBase: VectorOfArray
-using SciMLStructures: Tunable, canonicalize, replace, replace!
-using SymbolicIndexingInterface
 using Random
 using Serialization
-using CSV, Tables
 using Plots
 using DataFrames
-using Distributions
-using Symbolics
+# using Distributions
 # using DistributionsAD
-using BenchmarkTools
-using ForwardDiff
-using ForwardDiff: Dual
-using DynamicPPL
+# using BenchmarkTools
+
 
 Random.seed!(0);
+const SOLVER = Rosenbrock23()
 
-order = [:alpha_1, :kx1, :nx1, :beta_1, :alpha_2, :kx2, :nx2, :beta_2, :alpha_4, :kr, :nr, :beta_4,
-    :r1, :r2, :alpha_3, :beta_3, :kx3, :kcymRtot, :cuma]
+
+tunable_params = [:alpha_1, :kx1, :nx1, :beta_1, :alpha_2, :kx2, :nx2, 
+    :beta_2, :alpha_4, :kr, :nr, :beta_4, :r1, :r2, :alpha_3, :beta_3]
+fixed_params = [:kx3, :kcymRtot, :cuma]
 
 # the tunable parameters are listed first
-tunable_last_idx = 16
+order = [tunable_params ; fixed_params]
 
-tunable_params = order[1: tunable_last_idx]
-fixed_params = order[tunable_last_idx+1: end]
+tunable_last_idx = length(tunable_params)
+cuma_idx = findfirst(isequal(:cuma), order)
+
 
 function odes_warm_up!(du, y, p, t)
     y = max.(y, 0)
@@ -69,7 +62,6 @@ guess_map = Dict{Symbol,Float64}(
     :cuma => 2e-6
 )
 
-fixed_params_values = [guess_map[s] for s in fixed_params]
 
 prior_map = Dict{Symbol,Distribution}(
     :alpha_1 => Uniform(0.0, 2000.0),
@@ -100,8 +92,6 @@ A_idx = 1
 
 prob = ODEProblem(odes_warm_up!, u0, tspan, params)
 
-cuma_idx = findfirst(isequal(:cuma), order)
-
 ## basic validation
 # Solve the ODE
 # warm = solve(prob, Tsit5(), u0=u0)
@@ -115,10 +105,6 @@ cuma_idx = findfirst(isequal(:cuma), order)
 # sol = solve(prob, Tsit5(), u0 = warm.u[end])
 # display(Plots.plot(sol))
 
-# init_params_values = [guess_map[p.name] for p in ordered_ps]
-
-distributions = arraydist([prior_map[s] for s in tunable_params])
-
 
 @model function fit(
     data::AbstractVector, 
@@ -127,26 +113,40 @@ distributions = arraydist([prior_map[s] for s in tunable_params])
 
     σ ~ InverseGamma(2, 3)
     
-    draws ~ distributions
+    alpha_1 ~ truncated(Distributions.Uniform(0.0, 2000.0), lower = 0.0)
+    kx1 ~ truncated(Distributions.Uniform(0, 3.0e-8), lower = 0.0)
+    nx1 ~ truncated(Distributions.Uniform(1.0, 5.0), lower = 0.0)
+    beta_1  ~ truncated(Distributions.Uniform(0, 200.0), lower = 0.0)
+    alpha_2 ~ truncated(Distributions.Uniform(0.0, 250.0), lower = 0.0)
+    kx2 ~ truncated(Distributions.Uniform(0.0, 10000), lower = 0.0)
+    nx2 ~ truncated(Distributions.Uniform(1.0, 10.0), lower = 0.0)
+    beta_2 ~ truncated(Distributions.Uniform(0, 100.0), lower = 0.0)
+    alpha_4 ~ truncated(Distributions.Uniform(0, 1.0e13), lower = 0.0)
+    kr ~ truncated(Distributions.Uniform(0.0, 100.0), lower = 0.0)
+    nr ~ truncated(Distributions.Uniform(1.0, 100.0), lower = 0.0)
+    beta_4 ~ truncated(Distributions.Uniform(0,5000), lower = 0.0)
+    r1 ~ truncated(Distributions.Uniform(0.0,1000.0), lower = 0.0)
+    r2 ~ truncated(Distributions.Uniform(0.0, 1000.0), lower = 0.0)
+    alpha_3 ~ truncated(Distributions.Uniform(0.0, 10000.0), lower = 0.0)
+    beta_3 ~ truncated(Distributions.Uniform(0.0, 5000.0), lower = 0.0)
 
-    # extend draws with fixed params
-    T = typeof(draws[1])
-    p_work = Vector{T}(undef, length(order))
-    p_work[1:length(draws)] .= draws
-    p_work[length(draws)+1:end] .= T.(fixed_params_values)
+    p_work = [alpha_1, kx1, nx1, beta_1, alpha_2, kx2, nx2, beta_2, alpha_4, kr, nr, beta_4, r1, r2, alpha_3, beta_3,
+        # fixed [:kx3, :kcymRtot, :cuma]
+                4006.9, 2.75e3,     2e-6
+    ]
 
     try
-        warm = solve(prob, Rosenbrock23(), p=p_work, u0=u0, dtmin=1e-12)
+        warm = solve(prob, SOLVER, p=p_work, u0=u0, dtmin=1e-12)
         warm_u0 = warm[end]
 
         p_work[cuma_idx] = 2e-5
-        sol1 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
+        sol1 = solve(prob, SOLVER; p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
 
         p_work[cuma_idx] = 0.0001
-        sol2 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
+        sol2 = solve(prob, SOLVER; p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
 
         p_work[cuma_idx] = 0.001
-        sol3 = solve(prob, Rosenbrock23(); p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
+        sol3 = solve(prob, SOLVER; p=p_work, u0=warm_u0, dtmin=1e-12, saveat=saveat)
         
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
@@ -167,26 +167,41 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time)#, force_values=guesses_values)
+model = fit(data_subset, prob, time)#, force_values=guesses_values)
 
-init_params_draws = Dict(
+# Match the original inference.jl initialisation semantics.
+# Important: do not replace this with
+#     [[3.0]; [guess_map[s] for s in tunable_params]]
+# for NUTS.  The paper guess for alpha_2 is 391.1627, but the prior is
+# Uniform(0, 250), so that vector initialisation starts outside the support
+# (or, depending on Turing internals, at an extreme transformed value).  The
+# original file used this Dict, where the misspelled alpha/beta keys are not
+# used to initialise the corresponding variables.
+init_params = Dict(
     :σ => 3.0,
-    :draws => [guess_map[s] for s in tunable_params],
+    :alfa1 => 83.4743,
+    :kx1 => 1.28e-8,
+    :nx1 => 2.34,
+    :beta1 => 11.9586,
+    :alfa2 => 391.1627,
+    :kx2 => 36.4063,
+    :nx2 => 1.3,
+    :beta2 => 3.9e-4,
+    :alfa4 => 8.7519e6,
+    :kr => 0.51,
+    :nr => 3.2,
+    :beta4 => 7.1347,
+    :r1 => 89.0635,
+    :r2 => 7.0188,
+    :alfa3 => 17.7437,
+    :beta3 => 0.6644,
 )
 
 Random.seed!(4)
-nuts = NUTS(0.55,init_ϵ = 0.003)
-# adtype = AutoForwardDiff(chunksize = 17)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
+nuts = NUTS(0.65,init_ϵ = 0.001)
+chain = sample(model, nuts , MCMCSerial(), 3000, 3, init_params = init_params)
 
-# rename the chain 
-rename_map = Dict(
-    Symbol("draws[$i]") => tunable_params[i]
-    for i in eachindex(tunable_params)
-)
-chain_named = replacenames(chain_1, rename_map)
-
-f = open(string(@__DIR__)*"/reproduce_original_mk2.jls", "w")
-serialize(f, chain_named)
+f = open(string(@__DIR__)*"/reproduce_original_mk7_same.jls", "w")
+serialize(f, chain)
 close(f)
 
