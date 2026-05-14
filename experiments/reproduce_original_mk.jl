@@ -169,39 +169,31 @@ data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 model = fit(data_subset, prob, time)#, force_values=guesses_values)
 
-# Match the original inference.jl initialisation semantics.
-# Important: do not replace this with
-#     [[3.0]; [guess_map[s] for s in tunable_params]]
-# for NUTS.  The paper guess for alpha_2 is 391.1627, but the prior is
-# Uniform(0, 250), so that vector initialisation starts outside the support
-# (or, depending on Turing internals, at an extreme transformed value).  The
-# original file used this Dict, where the misspelled alpha/beta keys are not
-# used to initialise the corresponding variables.
 init_params = Dict(
     :σ => 3.0,
-    :alfa1 => 83.4743,
+    :alpha_1 => 83.4743,
     :kx1 => 1.28e-8,
     :nx1 => 2.34,
-    :beta1 => 11.9586,
-    :alfa2 => 391.1627,
+    :beta_1 => 11.9586,
+    :alpha_2 => 391.1627,
     :kx2 => 36.4063,
     :nx2 => 1.3,
-    :beta2 => 3.9e-4,
-    :alfa4 => 8.7519e6,
+    :beta_2 => 3.9e-4,
+    :alpha_4 => 8.7519e6,
     :kr => 0.51,
     :nr => 3.2,
-    :beta4 => 7.1347,
+    :beta_4 => 7.1347,
     :r1 => 89.0635,
     :r2 => 7.0188,
-    :alfa3 => 17.7437,
-    :beta3 => 0.6644,
+    :alpha_3 => 17.7437,
+    :beta_3 => 0.6644,
 )
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain = sample(model, nuts , MCMCSerial(), 3000, 3, init_params = init_params)
+chain = sample(model, nuts , MCMCSerial(), 3, 1, init_params = init_params)
 
-f = open(string(@__DIR__)*"/reproduce_original_mk7_same.jls", "w")
+f = open(string(@__DIR__)*"/reproduce_original_mk9.jls", "w")
 serialize(f, chain)
 close(f)
 
