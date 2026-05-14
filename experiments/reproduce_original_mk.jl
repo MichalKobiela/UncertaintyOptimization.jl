@@ -1,4 +1,3 @@
-# using Revise
 using OrdinaryDiffEq
 using CSV, Tables
 using LinearAlgebra: I
@@ -7,9 +6,7 @@ using Random
 using Serialization
 using Plots
 using DataFrames
-# using Distributions
-# using DistributionsAD
-# using BenchmarkTools
+using Distributions
 
 
 Random.seed!(0);
@@ -106,7 +103,6 @@ prob = ODEProblem(odes_warm_up!, u0, tspan, params)
 # sol = solve(prob, Tsit5(), u0 = warm.u[end])
 # display(Plots.plot(sol))
 
-
 @model function fit(
     data::AbstractVector, 
     prob, 
@@ -192,6 +188,7 @@ init_params = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
+
 chain = sample(model, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
 
 f = open(string(@__DIR__)*"/reproduce_original_mk11_sanityJ12.jls", "w")

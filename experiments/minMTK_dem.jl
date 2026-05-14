@@ -1,3 +1,7 @@
+# using Optimization, SciMLSensitivity, Zygote, OptimizationPolyalgorithms
+# using CairoMakie
+using LinearAlgebra 
+# using Revise
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
@@ -11,9 +15,9 @@ using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
-using Distributions
+# using Distributions
 # using DistributionsAD
-using AdvancedHMC: DenseEuclideanMetric
+# using AdvancedHMC: DenseEuclideanMetric
 
 Random.seed!(0);
 
@@ -285,7 +289,7 @@ Random.seed!(4)
 
 
 sampler = NUTS(0.5,init_ϵ = 0.003, 
-    metricT = DenseEuclideanMetric # different scale parameters and correlations
+    # metricT = DenseEuclideanMetric # different scale parameters and correlations
     ) # , max_depth=12)
 chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 

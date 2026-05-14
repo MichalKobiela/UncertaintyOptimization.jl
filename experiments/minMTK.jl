@@ -145,8 +145,8 @@ end
 tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
 
 state_order = unknowns(ns)
-A_idx = findfirst(isequal(A), state_order)
-B_idx = findfirst(isequal(B), state_order)
+A_idx = findfirst(isequal(ns.A), state_order)
+B_idx = findfirst(isequal(ns.B), state_order)
 
 # warm = solve(prob, Rosenbrock23())
 # # display(Plots.plot(sol))
@@ -210,7 +210,7 @@ B_idx = findfirst(isequal(B), state_order)
         # warm up
         cuma_setter!(p_work, (2e-6, ))
         # FIXME - the dtmin is hardcoded here
-        warm = solve(prob, Rosenbrock23(), p=p_work, dtmin=1e-12)
+        warm = solve(prob, Rosenbrock23(autodiff=false), p=p_work, dtmin=1e-12)
         # display(Plots.plot(warm))
 
         # TODO - caching
@@ -230,7 +230,7 @@ B_idx = findfirst(isequal(B), state_order)
         # set u0
         # TODO - cache the u0 types
         T = eltype(warm_u0)
-        # note we never modify u0_old, therefore u0 is never leaking into the next iteration 
+        # note we never modify u0_old, therefore u0 is never leaking into the next iteration
         # and the warm up on the next call still uses the correct u0
         u0_work = similar(u0_old, T)
         copyto!(u0_work, u0_old)
@@ -239,14 +239,14 @@ B_idx = findfirst(isequal(B), state_order)
         
         # @show p_work
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol1 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol2 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol3 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol3))
         
         # fixme - use 
@@ -280,8 +280,6 @@ init_params_draws = Dict(
 )
 
 Random.seed!(4)
-
-
 sampler = NUTS(0.5,init_ϵ = 0.003, max_depth=12)
 chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
