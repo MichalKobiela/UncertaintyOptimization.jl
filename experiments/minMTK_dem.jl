@@ -1,4 +1,3 @@
-using Revise
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
@@ -131,7 +130,7 @@ end
 # create a setter for your specific symbol order
 uncertain_setter! = setp(ns, multiparams_Nums)
 
-# cuma setter
+# cuma sette\r
 cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
 # create a tunable
@@ -297,7 +296,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23_j12.6updated.jls", "w")
 serialize(f, chain_named)
 close(f)
 

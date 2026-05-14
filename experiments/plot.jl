@@ -17,7 +17,7 @@ chain_1 = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") d
         deserialize(io)
 end
 
-chain_2 = open(string(@__DIR__)*"/minmtk_brokenc30_repeated_noprofiling_SetInitCorrected.jls", "r") do io
+chain_2 = open("/home/mbieniek/code/uncertainty-circ-opt/RPARealData/Inference/posterior_samples_large_range_1_c_renamedAndCorrectInit_rerun_j12withMTKEnv.jls", "r") do io
         deserialize(io)
 end
 
@@ -53,3 +53,15 @@ plot(plots...,
 
 # save the plot
 savefig(string(@__DIR__)*"/posterior.pdf")
+
+# save text files in case they're needed
+# CSV.write("ref.csv", DataFrame(chain_1[1:10:end,:, :]))
+# CSV.write("repr.csv", DataFrame(chain_2[1:10:end,:, :]))
+
+
+# using Statistics
+# chain_df = DataFrame(chain_1)
+# @show mean(chain_df.tree_depth .== 10)
+# @show mean(chain_df.n_steps .== 1023)
+# @show median(chain_df.n_steps)
+# @show maximum(chain_df.n_steps)

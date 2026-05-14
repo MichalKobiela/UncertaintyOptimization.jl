@@ -1,6 +1,7 @@
 # using Revise
 using OrdinaryDiffEq
 using CSV, Tables
+using LinearAlgebra: I
 using Turing
 using Random
 using Serialization
@@ -191,9 +192,9 @@ init_params = Dict(
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain = sample(model, nuts , MCMCSerial(), 3, 1, init_params = init_params)
+chain = sample(model, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
 
-f = open(string(@__DIR__)*"/reproduce_original_mk9.jls", "w")
+f = open(string(@__DIR__)*"/reproduce_original_mk11_sanityJ12.jls", "w")
 serialize(f, chain)
 close(f)
 

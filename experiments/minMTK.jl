@@ -15,7 +15,6 @@ using DataFrames
 using Distributions
 # using DistributionsAD
 
-
 Random.seed!(0);
 
 
@@ -41,22 +40,22 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
-eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-    ]
 # eqs = [
-#     D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
-#           (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-#           0.1 * r2 * max(B, 0),
+#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
+#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
 #     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-#         (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-#         0.02 * r1 * max(A, 0),
+#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
 #     ]
+eqs = [
+    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
+          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+          0.1 * r2 * max(B, 0),
+    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
+        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+        0.02 * r1 * max(A, 0),
+    ]
 
 @mtkcompile ns = System(eqs, t)
 
@@ -110,7 +109,7 @@ u0 = [A => 24.0, B => 350.0]
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
 # try jac=true with simplify=true
-prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=true)
+prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
 
 ## settable symbols (tunables)
 # FIXME - grab tunables programmatically rather than this list,
@@ -253,7 +252,7 @@ B_idx = findfirst(isequal(B), state_order)
         # fixme - use 
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
-        # print(e)
+        print(e)
         Turing.@addlogprob! -1e10
     end
 
@@ -281,8 +280,10 @@ init_params_draws = Dict(
 )
 
 Random.seed!(4)
-nuts = NUTS(0.65,init_ϵ = 0.001)
-chain_1 = sample(model2, nuts , MCMCSerial(), 3, 1, init_params = init_params_draws)
+
+
+sampler = NUTS(0.5,init_ϵ = 0.003, max_depth=12)
+chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
 # rename the chain 
 rename_map = Dict(
@@ -291,7 +292,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c29.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c50_nuts0.5_e0.003_md12.jls", "w")
 serialize(f, chain_named)
 close(f)
 
