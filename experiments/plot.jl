@@ -13,11 +13,15 @@ symbols = [:nx2, :beta_1, :beta_2, :alpha_4,
  :kr, :kx1, :alpha_2, :alpha_1, 
  :alpha_3, :beta_4]
 
+
+# recomputed, 3 chains in one go
+# "/home/mbieniek/code/uncertainty-circ-opt/RPARealData/Inference/posterior_samples_large_range_1_c_renamedAndCorrectInit.jls"
+
 chain_1 = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") do io
         deserialize(io)
 end
 
-chain_2 = open("/home/mbieniek/code/uncertainty-circ-opt/RPARealData/Inference/posterior_samples_large_range_1_c_renamedAndCorrectInit_rerun_j12withMTKEnv.jls", "r") do io
+chain_2 = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23_j12.6updated.jls", "r") do io
         deserialize(io)
 end
 

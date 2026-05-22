@@ -7,6 +7,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
 using CSV, Tables
 using Turing
+using MCMCChains: Chains, replacenames
 using SciMLBase: VectorOfArray
 using SciMLStructures: Tunable, canonicalize, replace, replace!
 using SymbolicIndexingInterface
@@ -291,7 +292,10 @@ Random.seed!(4)
 sampler = NUTS(0.5,init_ϵ = 0.003, 
     # metricT = DenseEuclideanMetric # different scale parameters and correlations
     ) # , max_depth=12)
-chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
+chain_1 = sample(model2, sampler, MCMCSerial(), 3000, 1;
+    init_params = init_params_draws,
+    chain_type = Chains,
+)
 
 # rename the chain 
 rename_map = Dict(
@@ -300,7 +304,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23_j12.6updated.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c54_nuts0.5_e0.003_DEM_tsitRB23_j12.1_sanity.toml_test.jls", "w")
 serialize(f, chain_named)
 close(f)
 
