@@ -60,7 +60,7 @@ rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
 # Run inference
 # nuts = NUTS(0.65, init_ϵ = 0.001; adtype = AutoZygote())
-nuts = NUTS(0.65, init_ϵ = 0.001)
+nuts = NUTS(0.5, init_ϵ = 0.003)
 spec = TuringSpec(
     data = data_subset,
     t_obs = time,
@@ -70,10 +70,10 @@ spec = TuringSpec(
     # uncertain_param_values = params,
     noise_prior = InverseGamma(2,3),
     sampler = nuts, # MH()
-    n_samples = 3,
+    n_samples = 3000,
     n_chains = 1,
     # abstol and reltol? 
-    solver = Rosenbrock23(),
+    solver = Rosenbrock23(), # AutoTsit5(Rosenbrock23()), # AutoTsit5(Rosenbrock23(autodiff=false)), 
     solver_opts = (dtmin=1e-12, ),
 )
 
@@ -89,7 +89,7 @@ chain = run_inference(model, spec)
 
 
 # plot(chain)
-f = open(string(@__DIR__)*"/posterior_try50.jls", "w")
+f = open(string(@__DIR__)*"/posterior_try67_nuts0.5_RB23_j12.1_noAutoDiffFalse.jls", "w")
 serialize(f, chain)
 close(f)
 
@@ -107,22 +107,7 @@ function loss(warmup_sol, predicted_sol)
 end
 
 # 
-run_design(model, chains, loss)
-
-function foo(x)
-    z = 0
-    x + z
-    # println("hello")
-end
-
-x = [1, 2, 3]
-function sum_elements()
-    s = 0
-    for val in x
-        s += val
-    end
-    return s
-end
+# run_design(model, chains, loss)
 
 
 # EP: there must be a grid loss search function, there must be a optimisation problem (find the minimum)
