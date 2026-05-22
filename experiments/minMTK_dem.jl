@@ -18,7 +18,7 @@ using Plots
 using DataFrames
 # using Distributions
 # using DistributionsAD
-# using AdvancedHMC: DenseEuclideanMetric
+using AdvancedHMC: DenseEuclideanMetric
 
 Random.seed!(0);
 
@@ -289,8 +289,8 @@ init_params_draws = Dict(
 Random.seed!(4)
 
 
-sampler = NUTS(0.5,init_ϵ = 0.003, 
-    # metricT = DenseEuclideanMetric # different scale parameters and correlations
+sampler = NUTS(1000, 0.5,init_ϵ = 0.003, 
+    metricT = DenseEuclideanMetric # different scale parameters and correlations
     ) # , max_depth=12)
 chain_1 = sample(model2, sampler, MCMCSerial(), 3000, 1;
     init_params = init_params_draws,
@@ -304,7 +304,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c54_nuts0.5_e0.003_DEM_tsitRB23_j12.1_sanity.toml_test.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c55_nuts0.5_e0.003_DEM_tsitRB23_j12.1_nuts1000.jls", "w")
 serialize(f, chain_named)
 close(f)
 
