@@ -1,3 +1,13 @@
+#=
+The purpouse of this script to use extract the kernel function from MTK and run it. 
+
+This was a way to see if we can still use MTK to our advantage, 
+    but not pay the price for the MTK-related machinery. 
+
+After extracting and benchmarking this code, I found that the kernel is fast, 
+but it is not the primary reason why the overall sampling is slow. 
+=#
+
 using Revise
 # avoid issues of world-age
 using ModelingToolkit, RuntimeGeneratedFunctions

@@ -1,3 +1,13 @@
+#=
+This script is a minimal implementation of MTK that reproduces the original code. 
+
+The standalone script is important in order to ensure that the number of variables does not change. 
+
+TODO:
+ - transition to the replace(Initials)
+=#
+
+
 using Revise
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;

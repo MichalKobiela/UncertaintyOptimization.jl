@@ -1,3 +1,14 @@
+#=
+The purpose of this script is to use DenseEuclideanMetric metric in NUTS. 
+
+DenseEuclideanMetric accounts not just for the different scales of parameters, 
+    but also for their correlation. 
+
+DenseEuclideanMetric improved initially performance, but this also seems to have been affected by the 
+version of the libraries. 
+
+=#
+
 # using Optimization, SciMLSensitivity, Zygote, OptimizationPolyalgorithms
 # using CairoMakie
 using LinearAlgebra 

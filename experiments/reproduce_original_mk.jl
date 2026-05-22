@@ -1,3 +1,17 @@
+#=
+The purpose of this script is to use to reproduce the original code but with the newer libraries
+and different standards of coding. 
+
+Note that the arraydist was used originally and it was cleaner to use it. 
+However, the results were not being reproduced (a very stiff behaviour)
+so naturally I relaxed it increasingly more to look like the original code. 
+
+I did not fully confirm it but I have a feeling that arraydist has bugs that 
+depend on the version of the library. 
+
+The reproduction was at the end achieved and this code runs using newer libraries. 
+=#
+
 using OrdinaryDiffEq
 using CSV, Tables
 using LinearAlgebra: I
