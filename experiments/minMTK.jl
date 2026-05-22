@@ -2,20 +2,14 @@
 This script is a minimal implementation of MTK that reproduces the original code. 
 
 The standalone script is important in order to ensure that the number of variables does not change. 
-
-TODO:
- - transition to the replace(Initials)
 =#
-
-
-using Revise
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
 using CSV, Tables
 using Turing
 using SciMLBase: VectorOfArray
-using SciMLStructures: Tunable, canonicalize, replace, replace!
+using SciMLStructures: Tunable, canonicalize, replace, replace!, Initials
 using SymbolicIndexingInterface
 using Random
 using Serialization
@@ -23,12 +17,10 @@ using CSV, Tables
 using Plots
 using DataFrames
 using Distributions
-# using DistributionsAD
+
 
 Random.seed!(0);
 
-
-# Define a nonlinear system
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true]
 @parameters alpha_2 [tunable = true]
@@ -50,6 +42,7 @@ Random.seed!(0);
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
+# soft
 # eqs = [
 #     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
 #           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
@@ -115,36 +108,19 @@ prior_map = Dict{Symbol,Distribution}(
 )
 
 u0 = [A => 24.0, B => 350.0]
-# 
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
 # try jac=true with simplify=true
 prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
 
-## settable symbols (tunables)
-# FIXME - grab tunables programmatically rather than this list,
 all_tunables = ModelingToolkit.tunable_parameters(ns)
 
 # Only keep tunables that are actually in the parameter set
 tunable_set = Set(ModelingToolkit.tunable_parameters(ns))
 tunable_params = [p for p in parameters(ns) if p in tunable_set]
 
-# get the Nums for the setter
-multiparams_Nums = Vector{Num}(undef, length(tunable_params))
-for (i, param) in enumerate(tunable_params)
-    multiparams_Nums[i] = getproperty(ns, param.name)
-end
-
-# create a setter for your specific symbol order
-uncertain_setter! = setp(ns, multiparams_Nums)
-
 # cuma setter
 cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
-
-# create a tunable
-tunable_ps, _, _ = canonicalize(Tunable(), prob.p)
-# FIXME - check the order after canonicalize
-# it should be the same as manual list of parameters
 
 # prepare the list of distributions for drawing in the right order
 tunable_priors = Vector{Distribution}(undef, length(tunable_params))
@@ -170,99 +146,32 @@ B_idx = findfirst(isequal(ns.B), state_order)
 # display(Plots.plot(sol))
 
 
-@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions, ig;
-    force_values=nothing)
+@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions, ig)
 
     σ ~ ig
 
-    # draw uncertain
-    # alpha_1 ~ Distributions.Uniform(0.0, 2000.0)
-    # alpha_2 ~ Distributions.Uniform(0.0, 250.0)
-    # alpha_3 ~ Distributions.Uniform(0.0, 1e4)
-    # alpha_4 ~ Distributions.Uniform(0.0, 1e13)
-    # beta_1 ~ Distributions.Uniform(0.0, 200.0)
-    # beta_2 ~ Distributions.Uniform(0.0, 100.0)
-    # beta_3 ~ Distributions.Uniform(0.0, 5e3)
-    # beta_4 ~ Distributions.Uniform(0.0, 5000.0)
-    # kx1 ~ Distributions.Uniform(0.0, 3e-8)
-    # nx1 ~ Distributions.Uniform(1.0, 5.0)
-    # kx2 ~ Distributions.Uniform(0.0, 1e4)
-    # nx2 ~ Distributions.Uniform(1.0, 10.0)
-    # kr ~ Distributions.Uniform(0.0, 100.0)
-    # nr ~ Distributions.Uniform(1.0, 100.0)
-    # r1 ~ Distributions.Uniform(0.0, 1000.0)
-    # r2 ~ Distributions.Uniform(0.0, 1000.0)
-
     draws ~ distributions
-
-    if !isnothing(force_values)
-        draws = force_values
-    end
-
-    # prepare container for the new types
-    T = eltype(draws)
-
-    # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
-    right_types = T.(tunable_ps)
-    # @show right_types
-    p_work = replace(Tunable(), prob.p, right_types)
-    # TODO - consider adding cuma as tunable, this 
-    # means we won't be able to leak it here, 
-    # and therefore we won't need to separately set it to the original value each time we call this
-    # TODO - square how to use this with caching (but first benchmark if it's worth it)
-    # HOW TO SELECT u0: p_work = replace(Initials(), prob.p, right_types), this might avoid the manual rebuilding
-
-    # switch to the new drawn parameters
-    uncertain_setter!(p_work, draws)
+    p_work = replace(Tunable(), prob.p, draws)
 
     # Solve the ODE
     try
-        # warm up
         cuma_setter!(p_work, (2e-6, ))
-        # FIXME - the dtmin is hardcoded here
         warm = solve(prob, Rosenbrock23(autodiff=false), p=p_work, dtmin=1e-12)
-        # display(Plots.plot(warm))
 
-        # TODO - caching
-        # update u0 in p_work
-        warm_u0 = warm.u[end]
-        P = typeof(p_work).name.wrapper
-
-        pvec = getfield(p_work, 1)
-        u0_old   = getfield(p_work, 2)
-        f3       = getfield(p_work, 3)
-        f4       = getfield(p_work, 4)
-        f5       = getfield(p_work, 5)
-        f6       = getfield(p_work, 6)
-
-        u0_setter! = setu(ns, unknowns(ns))
-
-        # set u0
-        # TODO - cache the u0 types
-        T = eltype(warm_u0)
-        # note we never modify u0_old, therefore u0 is never leaking into the next iteration
-        # and the warm up on the next call still uses the correct u0
-        u0_work = similar(u0_old, T)
-        copyto!(u0_work, u0_old)
-        p_work = P(pvec, u0_work, f3, f4, f5, f6)
-        u0_setter!(p_work[2], warm_u0)
+        p_work = replace(Initial(), p_work, warm.u[end])
         
-        # @show p_work
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
-        # display(Plots.plot(sol1))
 
         cuma_setter!(p_work, (0.0001, ))
         sol2 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
         sol3 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
-        # display(Plots.plot(sol3))
         
-        # fixme - use 
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
-        print(e)
+        # print(e)
         Turing.@addlogprob! -1e10
     end
 
@@ -279,10 +188,7 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))#, force_values=guesses_values)
-
-# Initilize parameters using results from the RPA paper
-# init_params_arr = [3.0,83.4743, 1.28e-8, 2.34, 2.75e3, 11.9586, 391.1627, 36.4063, 1.3, 3.9e-4, 8.7519e6, 0.51, 3.2, 7.1347, 89.0635, 7.0188, 17.7437, 4006.9, 0.6644]
+model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))
 
 init_params_draws = Dict(
     :σ => 3.0,
@@ -290,17 +196,16 @@ init_params_draws = Dict(
 )
 
 Random.seed!(4)
-sampler = NUTS(0.5,init_ϵ = 0.003, max_depth=12)
-chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
+sampler = NUTS(0.5,init_ϵ = 0.003)
+chain_1 = sample(model2, sampler , MCMCSerial(), 3, 1, init_params = init_params_draws)
 
-# rename the chain 
 rename_map = Dict(
     Symbol("draws[$i]") => tunable_params[i].name
     for i in eachindex(tunable_params)
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c50_nuts0.5_e0.003_md12.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c51_clean.jls", "w")
 serialize(f, chain_named)
 close(f)
 
