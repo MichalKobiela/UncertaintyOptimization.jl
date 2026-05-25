@@ -73,8 +73,6 @@ eqs = [
 # which we are going to use for all operations
 ordered_params = [p for p in parameters(ns)]
 
-@show ordered_params
-
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
     :alpha_2 => 391.1627, #  20.0, # 391.1627,
@@ -122,6 +120,8 @@ init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
 # try jac=true with simplify=true
 prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
+
+canonicalize(Initials(), prob.p)
 
 ## settable symbols (tunables)
 # FIXME - grab tunables programmatically rather than this list,
@@ -224,8 +224,6 @@ B_idx = findfirst(isequal(B), state_order)
 
     p_work = replace(Tunable(), prob.p, draws)
 
-    @show p_work
-
     # Solve the ODE
     try
         # warm up
@@ -235,7 +233,8 @@ B_idx = findfirst(isequal(B), state_order)
         # display(Plots.plot(warm))
 
         # update u0 
-        p_work = replace(Initials(), p_work, warm.u[end])
+        padded = [p_work[2][1], warm.u[end]..., p_work[2][4]]
+        p_work = replace(Initials(), p_work, padded)
         
         # @show p_work
         cuma_setter!(p_work, (2e-5, ))
@@ -297,7 +296,7 @@ Random.seed!(4)
 sampler = NUTS(0.5 #0.65,init_ϵ = 0.001, 
     # metricT = DenseEuclideanMetric # different scale parameters and correlations
     ) # , max_depth=12)
-chain = sample(model2, sampler , MCMCSerial(), 3, 1, init_params = init_params)
+chain = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params)
 
 # convert, `draws` becomes `draws[1]`, `draws[2]`, ...
 chain_mcmc = MCMCChains.Chains(chain)
@@ -313,7 +312,7 @@ chain_mcmc = MCMCChains.setinfo(chain_mcmc, (;))
 
 # chain_named = replacenames(chain_mcmc, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c60_j11.9_Initials.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c61_j11.9_padded.jls", "w")
 serialize(f, chain_mcmc)
 close(f)
 
