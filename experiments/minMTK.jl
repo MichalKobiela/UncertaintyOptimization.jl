@@ -62,8 +62,7 @@ eqs = [
 
 @mtkcompile ns = System(eqs, t)
 
-# parameters of the system in the correct order
-# which we are going to use for all operations
+# ordered parameters of the system
 ordered_params = [p for p in parameters(ns)]
 
 guess_map = Dict{Symbol,Float64}(
@@ -110,25 +109,14 @@ prior_map = Dict{Symbol,Distribution}(
 u0 = [A => 24.0, B => 350.0]
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
 
-# try jac=true with simplify=true
 prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
 
-all_tunables = ModelingToolkit.tunable_parameters(ns)
+# keep only the tunables (ordered)
+tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
 
-# Only keep tunables that are actually in the parameter set
-tunable_set = Set(ModelingToolkit.tunable_parameters(ns))
-tunable_params = [p for p in parameters(ns) if p in tunable_set]
-
-# cuma setter
 cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
-# prepare the list of distributions for drawing in the right order
-tunable_priors = Vector{Distribution}(undef, length(tunable_params))
-for (i, param) in enumerate(tunable_params)
-    tunable_priors[i] = prior_map[param.name]
-end
-
-tunable_priors2 = arraydist([prior_map[p.name] for p in tunable_params])
+tunable_priors = arraydist([prior_map[p.name] for p in tunable_params])
 
 state_order = unknowns(ns)
 A_idx = findfirst(isequal(ns.A), state_order)
@@ -188,7 +176,7 @@ data = data .- background_fluorescence
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time, tunable_priors2, InverseGamma(2, 3))
+model2 = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
 
 init_params_draws = Dict(
     :σ => 3.0,
@@ -205,7 +193,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c51_clean.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c51_clean_12.1.jls", "w")
 serialize(f, chain_named)
 close(f)
 
