@@ -146,7 +146,7 @@ B_idx = findfirst(isequal(ns.B), state_order)
         cuma_setter!(p_work, (2e-6, ))
         warm = solve(prob, Rosenbrock23(autodiff=false), p=p_work, dtmin=1e-12)
 
-        p_work = replace(Initial(), p_work, warm.u[end])
+        p_work = replace(Initials(), p_work, warm.u[end])
         
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
@@ -185,7 +185,7 @@ init_params_draws = Dict(
 
 Random.seed!(4)
 sampler = NUTS(0.5,init_ϵ = 0.003)
-chain_1 = sample(model2, sampler , MCMCSerial(), 3, 1, init_params = init_params_draws)
+chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
 
 rename_map = Dict(
     Symbol("draws[$i]") => tunable_params[i].name
@@ -193,7 +193,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c51_clean_12.1.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_c52_clean_12.1.jls", "w")
 serialize(f, chain_named)
 close(f)
 
