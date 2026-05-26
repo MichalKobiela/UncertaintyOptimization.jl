@@ -6,17 +6,16 @@ The standalone script is important in order to ensure that the number of variabl
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
-using CSV, Tables
 using Turing
-using SciMLBase: VectorOfArray
+# using SciMLBase: VectorOfArray
 using SciMLStructures: Tunable, canonicalize, replace, replace!, Initials
-using SymbolicIndexingInterface
+using SymbolicIndexingInterface: setp
 using Random
 using Serialization
-using CSV, Tables
+using CSV, Tables, DataFrames
 using Plots
-using DataFrames
 using Distributions
+using AdvancedHMC: DenseEuclideanMetric
 
 
 Random.seed!(0);
@@ -62,7 +61,6 @@ eqs = [
 
 @mtkcompile ns = System(eqs, t)
 
-# ordered parameters of the system
 ordered_params = [p for p in parameters(ns)]
 
 guess_map = Dict{Symbol,Float64}(
@@ -108,16 +106,14 @@ prior_map = Dict{Symbol,Distribution}(
 
 u0 = [A => 24.0, B => 350.0]
 init_params = Dict([p => guess_map[p.name] for p in ordered_params])
-
 prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
 
-# keep only the tunables (ordered)
+# prepare cuma setter and priors
 tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
-
 cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
-
 tunable_priors = arraydist([prior_map[p.name] for p in tunable_params])
 
+# find the states
 state_order = unknowns(ns)
 A_idx = findfirst(isequal(ns.A), state_order)
 B_idx = findfirst(isequal(ns.B), state_order)
@@ -166,17 +162,18 @@ B_idx = findfirst(isequal(ns.B), state_order)
     return nothing
 end
 
+# prepare data
 time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
         DataFrame)[!,1]
 data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
         DataFrame))
 background_fluorescence = 17.6
 data = data .- background_fluorescence
-# select specific modelled data
+# select specific experimental data conditions
 data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 
-model2 = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
+model = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
 
 init_params_draws = Dict(
     :σ => 3.0,
@@ -184,8 +181,8 @@ init_params_draws = Dict(
 )
 
 Random.seed!(4)
-sampler = NUTS(0.5,init_ϵ = 0.003)
-chain_1 = sample(model2, sampler , MCMCSerial(), 3000, 1, init_params = init_params_draws)
+sampler = NUTS(0.5,init_ϵ = 0.003, metricT = DenseEuclideanMetric)
+chain_1 = sample(model, sampler , MCMCSerial(), 3, 1, init_params = init_params_draws)
 
 rename_map = Dict(
     Symbol("draws[$i]") => tunable_params[i].name
@@ -193,7 +190,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_c52_clean_12.1.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r1_dem_test.jls", "w")
 serialize(f, chain_named)
 close(f)
 
