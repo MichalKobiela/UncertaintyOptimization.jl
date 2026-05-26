@@ -162,11 +162,9 @@ B_idx = findfirst(isequal(ns.B), state_order)
     return nothing
 end
 
-# prepare data
-time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
-        DataFrame)[!,1]
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
-        DataFrame))
+# prepare data (time point and measurements)
+time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
+data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", DataFrame))
 background_fluorescence = 17.6
 data = data .- background_fluorescence
 # select specific experimental data conditions
