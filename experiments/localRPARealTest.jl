@@ -18,11 +18,6 @@ using StatsPlots
 using AdvancedHMC: DenseEuclideanMetric
 
 
-"""
-Local testing script for the RPA model as in the paper and repo here: 
-    https://github.com/MichalKobiela/uncertainty-circ-opt/blob/main/RPARealData
-"""
-
 # Load model
 RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
 
@@ -36,13 +31,12 @@ init_cond = (24.0, 350.0) # Initial values for y1 and y2
 tspan = (0.0, 10.0)
         
 # Run simulation
-# sols = simulate!(model, init_cond, tspan; multiparam_length=3)
-# for sol in sols
-#     p = Plots.plot(sol)
-#     display(p)
-# end
+sols = simulate!(model, init_cond, tspan)
+for sol in sols
+    p = Plots.plot(sol)
+    display(p)
+end
 
-# CSV.write(".//experiments//RPA_real_data//rpa_ode1.csv", Tables.table(sol.u))
 time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
 data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
         DataFrame))
@@ -66,7 +60,7 @@ sim_spec = SimulationSpec(
 turing_spec = TuringSpec(
     simulation = sim_spec,
     data = data_selected,
-    noise_prior = InverseGamma(2,3), 
+    noise_prior = InverseGamma(2, 3), 
     noise_initial = 3.0, 
     sampler = NUTS(0.5, init_ϵ = 0.003, metricT = DenseEuclideanMetric),
     n_samples = 3,
@@ -77,6 +71,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_test.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_specSep_r1_test.jls"), "w") do f
     serialize(f, chain)
 end

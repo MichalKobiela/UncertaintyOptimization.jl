@@ -33,7 +33,6 @@ RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
 @mtkcompile sys = System(RPA_model.equations, t)
 model = Model(RPA_model, sys)
 
-# time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", DataFrame)[!,1]
 time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
 
 # load the precomputed posterior from a single chain for now

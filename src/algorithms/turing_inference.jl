@@ -161,28 +161,9 @@ end
     )
 
     σ ~ spec.noise_prior
-
-    # draw params into a vector
-    # the problem is that you have to draw only the uncertain params
-    # while we have to fill other params the right way
-    # so this complicates the architecture, 
-    # we could chain them together and do this part by part, with drawing at the end? 
-    
-
-    # ntoe that some params are drawn, but some are set with the multiparameters, 
-    # but the multiparameter ones have to happen in the simulate()
-    # so maybe we can first set uncertain params, 
-    # and the rest of symbols we can set with multiparam
      
-    # TODO - consider using TArray{Float64} in order to have an explicit type (AD-friendly?)
+    # FIXME - move arraydist to the outside
     uncertain_sampled_values ~ arraydist(collect(uncertain_priors))
-
-    # param_values = []
-    # for sym in uncertain_priors_symbols
-    #     val ~ NamedDist(priors[sym], @varname($sym))
-    #     push!(param_values, val)
-    # end
-
 
     simulation = spec.simulation
 

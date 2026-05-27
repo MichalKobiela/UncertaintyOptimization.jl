@@ -1,7 +1,7 @@
 using ModelingToolkit
 using OrdinaryDiffEq
 using SymbolicIndexingInterface
-using SciMLStructures: Tunable, canonicalize, replace, replace!
+using SciMLStructures: Tunable, canonicalize, replace, replace!, Initials
 using PreallocationTools
 using Plots
 using ForwardDiff
@@ -19,52 +19,29 @@ Provides methods for simulation, parameter manipulation, and result visualisatio
 # -------------------------------------------------------------------------
 # Struct Definitions
 # -------------------------------------------------------------------------
-mutable struct TunableP{T}
-    tunable_parameters::T
-end
 
 mutable struct Model
-    # TODO: extarct the MTK specific building blocks into their own sub-struct. 
-
     model_def::ModelDefinition
     sys:: Any # Compiled ModellingToolkit system
-    prob::Union{Nothing, ODEProblem, Function} #ODE supported first
-    sol::Any # solution of the LAST simulation
+    prob::Union{Nothing, ODEProblem, Function} # ODE supported first
 
-    warmup_params::Union{Nothing, Dict{Symbol, Float64}}
-    warmup_settable:: Union{Nothing, Vector{Pair{Int32, Float64}}}
-    # TODO - add "ordered" ie order matters
-    multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
-    # multiparam symbols are ordered
-    multiparam_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
-    # TODO -consider a parametric setter? 
+    tunable_priors::Any
+
+    # for setting the warmup parameters in the parameter container
+    warmup_setter!::Any
+    # the ordered warmup values for the setter
+    warmup_values::Union{Nothing, Tuple{Vararg{Symbol}}}
+
+    # for setting the tunable parameters
     multiparam_setter!::Any
-
-    # fields for inference procedure
-    uncertain_param_setter!:: Any
-    # TODO - write that this is ordered, and settable
-    uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
-    uncertain_getter::Any
-    p_vec::Any
-    tunable_pflat::Union{Nothing, TunableP}
-    # TODO - explain that this is the look up table for the p container copy
-    settable_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
-    simulation_context::Union{Nothing, NamedTuple}
-
+    # the ordered "lists" of values for the setter
+    multiparam_values::Union{Nothing, Tuple{Vararg{Tuple}}}
+    
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
-        # does warmup exist
-        warmup_params = get_warmup_params(model_def.parameters)
-        warmup = isempty(warmup_params) ? nothing :  warmup_params
-        
-        # TODO - ideally it be taken care of at the parsing stage
-        multiparams = get_array_params(model_def.parameters)
-
-        #Problem and solution are initially empty as they are created during simulation
-        new(model_def, sys, nothing, nothing, warmup, nothing, 
-        multiparams, nothing,
-        nothing, nothing, nothing, nothing, nothing, nothing, nothing)
-
+        new(model_def, sys, nothing, 
+        nothing, nothing,
+        nothing, nothing)
     end
 end
 # ----------------------------------------------------------s---------------
@@ -185,17 +162,12 @@ function simulate!(model::Model,
                    ;
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver = Rosenbrock23(),
-                #    dt::Float64=nothing,
                    saveat::Any = Float64[], # TODO - change to vector 
                    # solve kwargs
                    solver_opts::NamedTuple = (;),
                    save_idxs::Any = nothing,
-                   # TODO - consider parametric struct, or something that captures Duals? 
-                   sampled_uncertain_params::AbstractVector = nothing,
-                   # this has the 1st values in the right order
-                   # it is also initialised to warmup value if exists, or first param
+                   sampled_uncertain_params::Union{Nothing, AbstractVector} = nothing,
                    multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
-                   # the length of a single multiparam, they all have to be the same
                    multiparam_length:: Int = 1,
                    prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing
                    )
@@ -214,23 +186,21 @@ function simulate!(model::Model,
     prob = model.prob
 
     if !isnothing(sampled_uncertain_params)
-        T = eltype(sampled_uncertain_params)
-        p_work = replace(Tunable(), prob.p, T.(model.tunable_pflat.tunable_parameters))
-
-        model.uncertain_param_setter!(p_work, sampled_uncertain_params)
+        ## INFERENCE
+        # the tunable parameters have to be in the right order
+        p_work = replace(Tunable(), prob.p, sampled_uncertain_params)
     else
-        # does not happen during inference
-        # ----- can be part of the Model? this way you do not need to provide it twice (in inference and here)
-        p_work = replace(Tunable(), prob.p, model.tunable_pflat.tunable_parameters)
+        ## NON-INFERENCE Sim
+        # FIXME - we take a deep copy because we are modifying a cuma parameter
+        # ?we could set the cuma parameter here accordingly (in the warmup stage)
+        # this way we won't have to rely on the "original container settings"
+        p_work = deepcopy(prob.p)
 
-        # TODO - these values should be created in setup_simulation if they are not passed
-        # assume it is not inference, and create other objects
+        # refactor this with your other function
         multiparams = model.multiparams
-        # as in, how many multiparam there is
+        @show multiparams
         multiparam_count = isempty(multiparams) ? 1 : length(keys(multiparams))
-        # TODO - initialise, and make explicit ordered
         multiparam_values = Vector{Float64}(undef, multiparam_count)
-        # initialise the multiparam values to the first value? what about warmup? 
         for (i, symbol) in enumerate(model.multiparam_symbols)
             # TODO check if warm up has these parameters
             # TODO this is no longer necessary as we have a specific setter up now for multiparam
@@ -240,62 +210,34 @@ function simulate!(model::Model,
                 multiparam_values[i] = multiparams[symbol][1]
             end
         end
+
+        # FIXME - consider an inner function depending on the parameters present, but most likely this preallocaiton is redundant
         prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
-        # ----- can be part of the Model? 
     end
 
-
     if !isnothing(model.warmup_settable)
-        # initial params are the warm up params
-        sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
-
-        # @show prob
-        # TODO - add as optional
-        # sol = solve(prob, solver, p=p_work; solver_opts..., dense=false)
-
-        # p = Plots.plot(sol)
-        # display(p)
-
-        u0 = sol.u[end]
-        
-
-        P = typeof(p_work).name.wrapper
-
-        pvec = getfield(p_work, 1)
-        u0_old   = getfield(p_work, 2)
-        f3       = getfield(p_work, 3)
-        f4       = getfield(p_work, 4)
-        f5       = getfield(p_work, 5)
-        f6       = getfield(p_work, 6)
-
-        states = unknowns(model.sys)
-        u0_setter! = setu(model.sys, states)
-
-        # set u0
-        # TODO - cache the setter? 
-        T = eltype(u0)
-        u0_work = similar(u0_old, T)
-        copyto!(u0_work, u0_old)
-        p_work = P(pvec, u0_work, f3, f4, f5, f6)
-        u0_setter!(p_work[2], u0)
+        warm = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
+        p_work = replace(Initials(), p_work, warm.u[end])        
+        # TODO - add the check if the values you modify are indeed indexes 1 and 2 
+        #        some Julia versions move the actual u0 to indexes 2, 3 which breaks replace(Initials()...)
     end
 
     opts_prod = solver_opts
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
-    # @show multiparam_length
     for i in 1:multiparam_length
+
+        # set all multiparameters
         for (j, symbol) in enumerate(model.multiparam_symbols)
             multiparam_values[j] = model.multiparams[symbol][i]
         end
 
+        @show p_work    
+        @show multiparam_values
         model.multiparam_setter!(p_work, multiparam_values)
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
-
-        # p = Plots.plot(sol)
-        # display(p)
 
         prealloc_results_vector[i] = sol
     end
@@ -319,7 +261,6 @@ Prepares the model for simulation, created onced for many evaluations.
 
 function setup_simulation!(model::Model,
                           initial_conditions::Tuple{Vararg{Float64}},
-                          uncertain_param_values::Any,
                           tspan::Tuple{Float64, Float64};
                           solver::Any=Euler(),
                           solver_opts::Union{Nothing, NamedTuple}=NamedTuple(),
@@ -328,15 +269,20 @@ function setup_simulation!(model::Model,
                           )
     
     # Get states from the compiled system
+    # FIXME - Initial conditions should be named tuples (do not rely on indices)
     u0 = Dict(unknowns(model.sys) .=> initial_conditions)
+
     # Get all the parameters and their values as pairs for input into the problem - like mtk expects
     # BUT ovveride with new starting values if they have been provided
     p_map = Dict{Symbol, Float64}()
     uncertain_param_symbols = Vector{Symbol}()
 
+    # FIXME
+    # ideally we'd have a function "get initial values", that's the first value or a warmup
+
     warmup_map = get_warmup_params(model.model_def.parameters)
     if !isempty(warmup_map)
-        @info "Warm up parameters present. Using initial warmup values. "
+        @info "Warm up parameters present. Setting initial warmup values. "
     end
 
     # For all uncertain parameters in the model_definition
@@ -357,65 +303,33 @@ function setup_simulation!(model::Model,
         end
     end
 
-    # Now check if the user has provided new values
-    for (param_name, param_value) in uncertain_param_values
-        p_map[param_name] = param_value
-    end
-
     # This creates the dictionary that MTK needs to build the problem
     params = merge(p_map, warmup_map)
 
-    # temporarily create locally with let the same variables
-
     p_map_vars = Dict(
-        getproperty(model.sys, name) => val
-        for (name, val) in params
+        getproperty(model.sys, name) => val for (name, val) in params
     )
 
-    # Create the problem with all parameters and their starting values - including user provided ones
-    # TODO - revisit jac=True (should be on by default, what about yaml)
-    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)#, sparse=true)
-
-    # TODO - switch to a vector of symbols?
-    uncertain_Nums = Vector{Num}(undef, length(uncertain_param_symbols))
-    for (i, name) in enumerate(uncertain_param_symbols)
-        uncertain_Nums[i] = getproperty(model.sys, name)
-    end
-
-    model.uncertain_param_symbols =  Tuple(uncertain_param_symbols)
+    # Create the problem with all parameters and their starting values
+    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)
 
     # prepare the symbols for multiparams
     multiparams_Nums = Vector{Num}(undef, length(model.multiparams))
     # TODO note that order matters
     multiparam_symbols = Tuple(collect(keys(model.multiparams)))
     for (i, symbol) in enumerate(multiparam_symbols)
+        # FIXME - this should be iterated using the internal order of the MTK system
+        # not the arbitrary multiparam_symbols
         multiparams_Nums[i] = getproperty(model.sys, symbol)
     end
 
-    # states = unknowns(model.sys)
-    # @show states
-    # @show length(states)
-    # u0_Nums = Vector{Num}(undef, length(states))
-    # for (i, symbol) in enumerate(states)
-    #     u0_Nums[i] = getproperty(model.sys, nameof(symbol))
-    # end
+    # prepare cuma setter and priors
+    tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
+    cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
-    @show tunable_parameters(model.sys)
-
-    # this the array which will allow us to understand where the settable symbols are in the p container copy
-    settable_symbols = (uncertain_param_symbols..., multiparam_symbols...)
 
     # TODO mark as settable ordered
     model.multiparam_symbols = multiparam_symbols
-
-    # accounting for warm-up variables is a bit more tricky
-    # TODO - implement other cases
-    # I will start with our simple case where the warm up
-    # already exists in one of the settable params
-    # TODO - add test cases for warm up parameters not being in multiparams
-
-    # TODO - for now, store which parameters have the warmup, and how they have to be updated, 
-    # so a warmup is a tuple [index, value] but it refers reall yto the index in ordered settable prop.p copy container
     
     # TODO - finding warmup ideally is done after being set in model struct
     warmup_settable = Vector{Pair{Int32, Float64}}(undef, length(warmup_map))
@@ -429,26 +343,11 @@ function setup_simulation!(model::Model,
     end
     model.warmup_settable = warmup_settable
 
-    model.uncertain_param_setter! = setp(model.sys, uncertain_Nums)
-
-    # TODO - create one only if needed
     model.multiparam_setter! = setp(model.sys, multiparams_Nums)
 
-    model.p_vec = copy(model.prob.p)
-
-    # tunable p container
-    tunable_pflat, _, _ = canonicalize(Tunable(), model.prob.p)
-    model.tunable_pflat = TunableP(tunable_pflat)
-
     model.settable_symbols = settable_symbols
-
-    # getter setter
-    # model.uncertain_getter = getp(model.sys, [uncertain_Nums; u0_Nums])
-
-    # model.buffer_func = (p) -> remake_buffer(
-    #     model.sys, model.prob.p, Dict(zip(uncertain_syms, p))
-    # )
     
+    # fixme - this is a spec now
     model.simulation_context = (
         t_obs = t_obs,
         obs_state_idx = obs_state_idx,
