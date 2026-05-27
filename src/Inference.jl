@@ -21,16 +21,19 @@ function run_inference(model::Model, spec::InferenceSpec)
 end
 
 function setup_model_for_inference(model::Model, spec::InferenceSpec)
-    # Setup model simulation
-     setup_simulation!(
+    return setup_model_for_simulation(model, spec.simulation)
+end
+
+function setup_model_for_simulation(model::Model, simulation::SimulationSpec)
+    setup_simulation!(
         model,
-        spec.initial_conditions,    
-        spec.uncertain_param_values,
-        spec.tspan;                 
-        solver = spec.solver,       
-        solver_opts = spec.solver_opts,
-        spec.t_obs,                 
-        spec.obs_state_idx,         
+        simulation.initial_conditions,
+        simulation.uncertain_param_values,
+        simulation.tspan;
+        solver = simulation.solver,
+        solver_opts = simulation.solver_opts,
+        t_obs = simulation.t_obs,
+        obs_state_idx = simulation.obs_state_idx,
     )
     
     return nothing

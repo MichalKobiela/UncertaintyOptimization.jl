@@ -75,19 +75,24 @@ randomized = VectorOfArray([sol(t_obs[i])[1] + 1*randn() for i in eachindex(t_ob
 data = convert(Array, randomized)
 
 # Run inference
-spec = TuringSpec(
-    data = data,
+sim_spec = SimulationSpec(
     t_obs = t_obs,
     obs_state_idx = 1,
-    initial_conditions = [1.0, 1.0],
+    initial_conditions = (1.0, 1.0),
     tspan = (0.0, 100.0),
     uncertain_param_values = params,
-    noise_prior = InverseGamma(2,3),
+    solver = Euler(),
+    solver_opts = (dt = 0.01,),
+)
+
+spec = TuringSpec(
+    simulation = sim_spec,
+    data = data,
+    noise_prior = InverseGamma(2,3), 
+    noise_initial = 3.0, 
     sampler = NUTS(0.65),
     n_samples = sampling_size,
     n_chains = 3,
-    solver = Euler(),
-    dt = 0.01
 )
 
 @time chain = run_inference(model, spec)

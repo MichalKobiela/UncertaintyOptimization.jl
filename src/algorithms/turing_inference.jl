@@ -82,15 +82,17 @@ end
 function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
     uncertain_values = Float64[]
 
+    simulation = spec.simulation
+
     for symbol in model.uncertain_param_symbols
-        if haskey(spec.uncertain_param_values, symbol)
-            push!(uncertain_values, float(spec.uncertain_param_values[symbol]))
+        if haskey(simulation.uncertain_param_values, symbol)
+            push!(uncertain_values, float(simulation.uncertain_param_values[symbol]))
             continue
         end
 
         param_spec = model.model_def.parameters[symbol]
         if isnothing(param_spec.value)
-            error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.uncertain_param_values.")
+            error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.simulation.uncertain_param_values.")
         end
         if param_spec.value isa Tuple || param_spec.value isa AbstractArray
             error("Uncertain parameter $symbol has a non-scalar initial value, which is not supported for Turing initialisation.")
@@ -99,18 +101,8 @@ function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
         push!(uncertain_values, float(param_spec.value))
     end
 
-    σ_init = try
-        float(mode(spec.noise_prior))
-    catch
-        try
-            float(mean(spec.noise_prior))
-        catch
-            1.0
-        end
-    end
-
     return Dict(
-        :σ => σ_init,
+        :σ => spec.noise_initial,
         :uncertain_sampled_values => uncertain_values,
     )
 end
@@ -192,14 +184,16 @@ end
     # end
 
 
+    simulation = spec.simulation
+
     # @code_warntype 
-    sols = simulate!(model, spec.initial_conditions, spec.tspan;
+    sols = simulate!(model, simulation.initial_conditions, simulation.tspan;
         # parameters = drawn_params,
-        solver=spec.solver, 
+        solver=simulation.solver, 
         # dt=spec.dt, 
-        saveat=spec.t_obs, 
+        saveat=simulation.t_obs, 
         # inference
-        solver_opts = spec.solver_opts,
+        solver_opts = simulation.solver_opts,
         sampled_uncertain_params = uncertain_sampled_values,
         multiparam_values = multiparam_values,
         multiparam_length = multiparam_length,

@@ -10,18 +10,14 @@ This abstract type allows algorithm-specific specs. And makes it trivial to add 
 Fields common to all algorithms
 
 - `data::Vector{Float64}`: Observed data
-- `t_obs::Vector{Float64}`: Observation times
-- `obs_state_idx::Int`: Which state is observed
-- `initial_conditions::Vector{Float64}`: Starting state
-- `tspan::Tuple{Float64,Float64}`: Time span
-- `fixed_params::Dict`: Additional fixed parameters
+- `simulation::SimulationSpec`: Shared simulation settings
 
 
 """
 
 abstract type InferenceSpec end
 
-# =================================s========================================
+# =========================================================================
 # TURING SPEC: TURING-specific settings
 # =========================================================================
 
@@ -30,64 +26,58 @@ abstract type InferenceSpec end
 Uses all fields from InferenceSpec, plus:
 
 - `noise_prior::Distribution`: Prior for observation noise
+- `noise_initial::Float64`: Initial value for observation noise
 - `sampler::Any`: Turing sampler (NUTS, HMC, etc.)
 - `n_samples::Int`: Samples per chain
 - `n_chains::Int`: Number of chains
 - `sampling_method::Any`: Threading method
-- `solver`: solver
-- `dt::Float64`: Time step
 
  Example
 ```julia
-spec = TuringSpec(
-    data = observations,
+sim_spec = SimulationSpec(
     t_obs = times,
     obs_state_idx = 1,
-    initial_conditions = [1.0, 1.0],
+    initial_conditions = (1.0, 1.0),
     tspan = (0.0, 100.0),
+)
+
+spec = TuringSpec(
+    simulation = sim_spec,
+    data = observations,
     noise_prior = InverseGamma(2, 3),
+    noise_initial = 3.0,
     sampler = NUTS(0.65),
-    n_samples = 1000,
-    n_chains = 3
+    n_samples = 3000,
+    n_chains = 1,
 )
 ```
 """
 
 struct TuringSpec <: InferenceSpec
-    # Common fields
+    # Shared simulation settings
+    simulation::SimulationSpec
+
+    # Observed data
     data::Union{Vector{Float64}, Matrix{Float64}}
-    t_obs::Vector{Float64}
-    obs_state_idx::Int
-    initial_conditions::Tuple{Vararg{Number}}
-    tspan::Tuple{Float64, Float64}
-    uncertain_param_values::Dict
 
     # Bayesian-specific fields
     noise_prior::Distribution
+    noise_initial::Float64
     sampler::Any
     n_samples::Int
     n_chains::Int
     sampling_method::Any
-    solver::Any
-
-    solver_opts::NamedTuple
     
     # Constructor with defaults
     function TuringSpec(;
+                      simulation::SimulationSpec,
                       data::Union{Vector{Float64}, Matrix{Float64}},
-                      t_obs::Vector{Float64},
-                      obs_state_idx::Int=1,
-                      initial_conditions::Tuple{Vararg{Number}},
-                      tspan::Tuple{Float64, Float64},
-                      uncertain_param_values::Dict=Dict(),
                       noise_prior::Distribution=InverseGamma(2, 3),
+                      noise_initial::Real=3.0,
                       sampler=NUTS(0.65),
-                      n_samples::Int=1000,
-                      n_chains::Int=3,
+                      n_samples::Int=3000,
+                      n_chains::Int=1,
                       sampling_method=MCMCSerial(),
-                      solver=Euler(),
-                    #   dt::Float64=nothing,
-                      solver_opts::NamedTuple=NamedTuple(),
                       )
         
         # Validation TODO
@@ -98,9 +88,11 @@ struct TuringSpec <: InferenceSpec
         if n_samples < 1
             error("❌ n_samples must be positive")
         end
-        
-        new(data, t_obs, obs_state_idx, initial_conditions, tspan,
-            uncertain_param_values, noise_prior, sampler, n_samples, n_chains,
-            sampling_method, solver, solver_opts)
+
+        if noise_initial <= 0
+            error("❌ noise_initial must be positive")
+        end
+
+        new(simulation, data, noise_prior, Float64(noise_initial), sampler, n_samples, n_chains, sampling_method)
     end
 end
