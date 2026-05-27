@@ -130,9 +130,9 @@ B_idx = findfirst(isequal(ns.B), state_order)
 # display(Plots.plot(sol))
 
 
-@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions, ig)
+@model function fit(data::AbstractVector, prob, saveat::AbstractVector, distributions, noise_prior)
 
-    σ ~ ig
+    σ ~ noise_prior
 
     draws ~ distributions
     p_work = replace(Tunable(), prob.p, draws)
@@ -188,7 +188,7 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_r1_dem_test.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r2_dem_j12.6local_test.jls", "w")
 serialize(f, chain_named)
 close(f)
 
