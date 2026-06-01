@@ -20,6 +20,10 @@ using AdvancedHMC: DenseEuclideanMetric
 
 Random.seed!(0);
 
+
+# const SOLVER = autoTsit5(Rosenbrock23(autodiff=false))
+const SOLVER = Rosenbrock23(autodiff=false)
+
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true]
 @parameters alpha_2 [tunable = true]
@@ -140,18 +144,18 @@ B_idx = findfirst(isequal(ns.B), state_order)
     # Solve the ODE
     try
         cuma_setter!(p_work, (2e-6, ))
-        warm = solve(prob, Rosenbrock23(autodiff=false), p=p_work, dtmin=1e-12)
+        warm = solve(prob, SOLVER, p=p_work, dtmin=1e-12)
 
         p_work = replace(Initials(), p_work, warm.u[end])
         
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol2 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, Rosenbrock23(autodiff=false), p=p_work; dtmin=1e-12, saveat=saveat)
+        sol3 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
         
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
