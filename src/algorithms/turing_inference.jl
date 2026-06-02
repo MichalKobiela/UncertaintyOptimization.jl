@@ -27,32 +27,12 @@ function run_inference(model::Model, spec::TuringSpec)
     priors = make_priors(model)
     initial_params = make_initial_params(model, spec)
 
-    multiparams = model.multiparams
-    # as in, how many multiparam there is
-    multiparam_count = isempty(multiparams) ? 1 : length(keys(multiparams))
-    # TODO - initialise, and make explicit ordered
-    multiparam_values = Vector{Float64}(undef, multiparam_count)
-    # initialise the multiparam values to the first value? what about warmup? 
-    for (i, symbol) in enumerate(model.multiparam_symbols)
-        # TODO check if warm up has these parameters
-        # TODO this is no longer necessary as we have a specific setter up now for multiparam
-        if symbol in keys(model.warmup_params)
-            multiparam_values[i] = model.warmup_params[symbol]
-        else
-            multiparam_values[i] = multiparams[symbol][1]
-        end
-    end
-
-    # ie how many different parameters (experiments) are being compared
-    multiparam_length = isempty(multiparams) ? 1 : length(last(first(multiparams)))
-
     # preallocate for the hot loop the results vector
-    prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
+    results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
+    prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
     
     # 2. Build turing model
     fit_fcn = fit(model, spec, priors, spec.data; 
-        multiparam_values=multiparam_values, 
-        multiparam_length = multiparam_length,
         prealloc_results_vector=prealloc_results_vector)
     #fit_fcn = optim_model()
 
@@ -72,7 +52,7 @@ function run_inference(model::Model, spec::TuringSpec)
 
     # rename the chain draws to the correct variables
     rename_map = Dict(
-        Symbol("uncertain_sampled_values[$i]") => model.uncertain_param_symbols[i] for i in eachindex(model.uncertain_param_symbols)
+        Symbol("uncertain_sampled_values[$i]") => model.tunable_symbols[i] for i in eachindex(model.tunable_symbols)
     )
     chain_named = replacenames(chain, rename_map)
     
@@ -80,66 +60,10 @@ function run_inference(model::Model, spec::TuringSpec)
 end
 
 function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
-    uncertain_values = Float64[]
-
-    simulation = spec.simulation
-
-    for symbol in model.uncertain_param_symbols
-        if haskey(simulation.uncertain_param_values, symbol)
-            push!(uncertain_values, float(simulation.uncertain_param_values[symbol]))
-            continue
-        end
-
-        param_spec = model.model_def.parameters[symbol]
-        if isnothing(param_spec.value)
-            error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.simulation.uncertain_param_values.")
-        end
-        if param_spec.value isa Tuple || param_spec.value isa AbstractArray
-            error("Uncertain parameter $symbol has a non-scalar initial value, which is not supported for Turing initialisation.")
-        end
-
-        push!(uncertain_values, float(param_spec.value))
-    end
-
     return Dict(
         :σ => spec.noise_initial,
-        :uncertain_sampled_values => uncertain_values,
+        :uncertain_sampled_values => model.tunable_initial,
     )
-end
-
-# -------------------------------------------------------------------------
-# HELPERS
-# -------------------------------------------------------------------------
-
-# helper to make a distribution object - currently only uniform supported but can extend to others
-function make_prior(prior::Dict)
-
-    dist = lowercase(prior["distribution"])
-    if dist == "uniform"
-        return truncated(Distributions.Uniform(prior["lower"], prior["upper"]), lower = prior["lower"])
-    else
-        error("Unsupported prior distribution: $(prior["distribution"])")
-    end
-
-end
-
-# helper to build all priors for all uncertain params
-function make_priors(model::Model)::Tuple{Vararg{Distribution}}
-    priors = Vector{Distribution}(undef, length(model.uncertain_param_symbols))
-
-    for (i, symbol) in enumerate(model.uncertain_param_symbols)
-        for (param_symbol, param_spec) in model.model_def.parameters
-            if param_symbol == symbol
-                if param_spec.role != :uncertain
-                    error("A found uncertain parameter $symbol is not uncertain")
-                end
-
-                priors[i] = make_prior(param_spec.prior)
-            end
-        end
-    end
-
-    return Tuple(priors)
 end
 
 # -------------------------------------------------------------------------
@@ -155,8 +79,6 @@ end
 - Builds likelihood from spec
 """
 @model function fit(model, spec, uncertain_priors, data; 
-    multiparam_values::Vector{Float64}, 
-    multiparam_length::Int = 1,
     prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing,
     )
 
@@ -176,8 +98,6 @@ end
         # inference
         solver_opts = simulation.solver_opts,
         sampled_uncertain_params = uncertain_sampled_values,
-        multiparam_values = multiparam_values,
-        multiparam_length = multiparam_length,
         prealloc_results_vector = prealloc_results_vector,
         )
 

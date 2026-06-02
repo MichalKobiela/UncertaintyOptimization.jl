@@ -68,11 +68,7 @@ Helper to convert a char read from the YAML to an @parameter required for the Mo
 
 function create_param(x; tunable::Bool=false)
     sym = Symbol(x)
-    # ideally we'd do this
-    # Symbolics.unwrap(first(@parameters $sym [tunable = $tunable]))
-    # TODO - this eval created a global symbol that later creates issues with const, 
-    # Symbolics.unwrap(first(@eval ModelingToolkit.@parameters $sym [tunable = $tunable]))
-    Symbolics.unwrap(first(@parameters $sym))
+    Symbolics.unwrap(first(@parameters $sym [tunable = tunable]))
 end
 
 """

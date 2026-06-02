@@ -28,12 +28,7 @@ function setup_model_for_simulation(model::Model, simulation::SimulationSpec)
     setup_simulation!(
         model,
         simulation.initial_conditions,
-        simulation.uncertain_param_values,
         simulation.tspan;
-        solver = simulation.solver,
-        solver_opts = simulation.solver_opts,
-        t_obs = simulation.t_obs,
-        obs_state_idx = simulation.obs_state_idx,
     )
     
     return nothing

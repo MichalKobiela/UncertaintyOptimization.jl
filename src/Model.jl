@@ -26,6 +26,8 @@ mutable struct Model
     prob::Union{Nothing, ODEProblem, Function} # ODE supported first
 
     tunable_priors::Any
+    tunable_initial::Tuple{Vararg{Float64}}
+    tunable_symbols::Tuple{Vararg{Symbol}}
 
     # for setting the warmup parameters in the parameter container
     warmup_setter!::Any
@@ -41,8 +43,8 @@ mutable struct Model
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
         new(model_def, sys, nothing, 
-        # tunable priors
-        nothing,
+        # tunables
+        nothing, () :: Tuple{Vararg{Float64}}, () :: Tuple{Vararg{Float64}},
         # warmup
         nothing, () :: Tuple{Vararg{Float64}},
         # multiparams
@@ -81,7 +83,7 @@ function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}):: Dict{Symbo
     return warmup_map
 end
 
-function get_array_params(parameters::Dict{Symbol, ParameterSpec})::Dict{Symbol, Tuple{Vararg{Float64}}}
+function extract_multiparams(parameters::Dict{Symbol, ParameterSpec})::Dict{Symbol, Tuple{Vararg{Float64}}}
     multiparams = Dict{Symbol, Tuple{Vararg{Float64}}}()
     for kv in pairs(parameters)
         if kv.second.value isa Union{AbstractArray, Tuple}
@@ -189,8 +191,6 @@ function simulate!(model::Model,
     multiparam_length = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
 
     if !isnothing(sampled_uncertain_params)
-        ## INFERENCE
-        # the tunable parameters have to be in the right order
         p_work = replace(Tunable(), prob.p, sampled_uncertain_params)
     else
         ## NON-INFERENCE Sim
@@ -205,7 +205,6 @@ function simulate!(model::Model,
 
     if !isnothing(model.warmup_values)
         warm = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
-        display(Plots.plot(warm))
         p_work = replace(Initials(), p_work, warm.u[end])        
         # TODO - add the check if the values you modify are indeed indexes 1 and 2 
         #        some Julia versions move the actual u0 to indexes 2, 3 which breaks replace(Initials()...)
@@ -219,7 +218,6 @@ function simulate!(model::Model,
 
         # set all multiparameters
         if !isempty(model.multiparam_values)
-            @show model.multiparam_values[i]
             model.multiparam_setter!(p_work, model.multiparam_values[i])
         end
 
@@ -296,44 +294,7 @@ function setup_simulation!(model::Model,
     # Create the problem with all parameters and their starting values
     model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)
 
-    # extract the multiparams from the original data
-    
-    multiparams = get_array_params(model.model_def.parameters)
-
-    # prepare the MTK specific Nums
-    multiparams_Nums = Vector{Num}(undef, length(multiparams))
-    # this is the correct order for the symbols
-    multiparam_symbols = Vector{Symbol}(undef, length(multiparams))
-    multiparam_values = Vector{Tuple}(undef, length(multiparams))
-
     ordered_params = ModelingToolkit.parameters(model.sys)
-
-    # add the multiparameter using the MTK order
-    counter = 1
-    for p in ordered_params
-        s = Symbolics.tosymbol(p)
-
-        if haskey(multiparams, s)
-            multiparams_Nums[counter] = getproperty(model.sys, s)
-            multiparam_symbols[counter] = s
-            multiparam_values[counter] = multiparams[s]
-        end
-    end
-
-    # we have to flip the values so that the first set contains the first column
-    multiparam_values_flipped = [collect(x) for x in zip(multiparam_values...)]
-
-    # extract the actual values and structure them in the right order
-    # these will be used later with the psetter
-    model.multiparam_values = Tuple(Tuple.(multiparam_values_flipped))
-
-    # setter for multiparams
-    model.multiparam_setter! = setp(model.sys, multiparams_Nums)
-
-    # prepare the setter and priors
-    tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
-
-    # some variables are not tunable and have a warmup value, a setter is needed for these
 
 
     ## warmup
@@ -354,8 +315,104 @@ function setup_simulation!(model::Model,
     end
     model.warmup_values = Tuple(warmup_values)
     model.warmup_setter! = setp(model.sys, warmup_Nums)
+
+
+    ## multiparams
+    multiparams = extract_multiparams(model.model_def.parameters)
+
+    # prepare the MTK specific Nums
+    multiparams_Nums = Vector{Num}(undef, length(multiparams))
+    multiparam_values = Vector{Tuple}(undef, length(multiparams))
+
+    ordered_params = ModelingToolkit.parameters(model.sys)
+
+    # add the multiparameter using the MTK order
+    counter = 1
+    for p in ordered_params
+        s = Symbolics.tosymbol(p)
+
+        if haskey(multiparams, s)
+            multiparams_Nums[counter] = getproperty(model.sys, s)
+            multiparam_values[counter] = multiparams[s]
+        end
+    end
+
+    # we have to flip the values so that the first set contains the first column
+    multiparam_values_flipped = [collect(x) for x in zip(multiparam_values...)]
+    # extract the actual values and structure them in the right order
+    # these will be used later with the psetter
+    model.multiparam_values = Tuple(Tuple.(multiparam_values_flipped))
+
+    # setter for multiparams
+    model.multiparam_setter! = setp(model.sys, multiparams_Nums)
+
+    ## tunable
+    tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
+
+    model.tunable_symbols = Tuple(Symbolics.tosymbol(p) for p in tunable_params)
+    model.tunable_priors = arraydist(make_priors(model))
+    model.tunable_initial = get_initial_tunables(model)
     
     @info "Model built and compiled..."
 
     return nothing
+end
+
+# helper to build all priors for all uncertain params
+function make_priors(model::Model)::Vector{Uniform{Float64}}
+    ordered_params = ModelingToolkit.parameters(model.sys)
+    tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
+    
+    priors = Vector{Uniform{Float64}}(undef, length(tunable_params))
+
+    for (i, param) in enumerate(tunable_params)
+        s = Symbolics.tosymbol(param)
+
+        for (param_symbol, param_spec) in model.model_def.parameters
+            if param_symbol == s
+                if param_spec.role != :uncertain
+                    error("A found uncertain parameter $symbol is not uncertain")
+                end
+
+                priors[i] = make_prior(param_spec.prior)
+            end
+        end
+    end
+
+    return priors
+end
+
+# helper to make a distribution object - currently only uniform supported but can extend to others
+function make_prior(prior::Dict)
+    dist = lowercase(prior["distribution"])
+    if dist == "uniform"
+        return Distributions.Uniform(prior["lower"], prior["upper"])
+    end
+    
+    error("Unsupported prior distribution: $(prior["distribution"])")
+end
+
+function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
+    ordered_params = ModelingToolkit.parameters(model.sys)
+    tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
+
+    initial_tunable_values = Vector{Float64}(undef, length(tunable_params))
+
+    for (i, param) in enumerate(tunable_params)
+        s = Symbolics.tosymbol(param)
+
+        for (param_symbol, param_spec) in model.model_def.parameters
+            if param_symbol == s
+                if isnothing(param_spec.value)
+                    error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.simulation.uncertain_param_values.")
+                elseif param_spec.value isa Tuple || param_spec.value isa AbstractArray
+                    error("Uncertain parameter $symbol has a non-scalar initial value, which is not supported for Turing initialisation.")
+                end
+
+                initial_tunable_values[i] = float(param_spec.value)
+            end
+        end
+    end
+
+    return Tuple(initial_tunable_values)
 end
