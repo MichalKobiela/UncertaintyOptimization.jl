@@ -204,7 +204,7 @@ function simulate!(model::Model,
     end
 
     if !isnothing(model.warmup_values)
-        warm = solve(prob, solver, p=p_work; solver_opts..., )#save_end=true, save_everystep=false, dense=false)
+        warm = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
         display(Plots.plot(warm))
         p_work = replace(Initials(), p_work, warm.u[end])        
         # TODO - add the check if the values you modify are indeed indexes 1 and 2 
