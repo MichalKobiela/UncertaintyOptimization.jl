@@ -69,8 +69,8 @@ turing_spec = TuringSpec(
 
 Random.seed!(4)
 
-chain = run_inference(model, turing_spec)
+# chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_specSep_r1_test.jls"), "w") do f
-    serialize(f, chain)
-end
+# open(joinpath(@__DIR__, "mtk_specSep_r2_test.jls"), "w") do f
+#     serialize(f, chain)
+# end
