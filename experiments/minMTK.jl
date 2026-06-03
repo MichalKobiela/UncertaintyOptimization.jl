@@ -114,8 +114,9 @@ prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simpl
 
 # prepare cuma setter and priors
 tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
-cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 tunable_priors = arraydist([prior_map[p.name] for p in tunable_params])
+
+cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
 
 # find the states
 state_order = unknowns(ns)

@@ -53,7 +53,7 @@ sim_spec = SimulationSpec(
     obs_state_idx = 1,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
-    solver = Rosenbrock23(autodiff=false),
+    solver = AutoTsit5(Rosenbrock23(autodiff=false)),
     solver_opts = (dtmin = 1e-12,),
 )
 

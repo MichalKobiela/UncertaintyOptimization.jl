@@ -203,7 +203,13 @@ function simulate!(model::Model,
         prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
     end
 
-    if !isnothing(model.warmup_values)
+    if !isempty(model.warmup_values)
+        # Reset warmup parameters on every simulation call. Some parameter containers
+        # returned by `replace(Tunable(), ...)` share non-tunable storage with `prob.p`,
+        # so production-stage multiparameter updates can otherwise leak into the next
+        # warmup solve.
+        model.warmup_setter!(p_work, model.warmup_values)
+
         warm = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
         p_work = replace(Initials(), p_work, warm.u[end])        
         # TODO - add the check if the values you modify are indeed indexes 1 and 2 
@@ -311,6 +317,7 @@ function setup_simulation!(model::Model,
         if haskey(warmup_map, s)
             warmup_Nums[counter] = getproperty(model.sys, s)
             warmup_values[counter] = warmup_map[s]
+            counter += 1
         end
     end
     model.warmup_values = Tuple(warmup_values)
@@ -334,6 +341,7 @@ function setup_simulation!(model::Model,
         if haskey(multiparams, s)
             multiparams_Nums[counter] = getproperty(model.sys, s)
             multiparam_values[counter] = multiparams[s]
+            counter += 1
         end
     end
 
