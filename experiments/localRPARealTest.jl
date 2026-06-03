@@ -32,10 +32,10 @@ tspan = (0.0, 10.0)
         
 # Run simulation
 sols = simulate!(model, init_cond, tspan)
-for sol in sols
-    p = Plots.plot(sol)
-    display(p)
-end
+# for sol in sols
+#     p = Plots.plot(sol)
+#     display(p)
+# end
 
 time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
 data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
@@ -69,8 +69,8 @@ turing_spec = TuringSpec(
 
 Random.seed!(4)
 
-# chain = run_inference(model, turing_spec)
+chain = run_inference(model, turing_spec)
 
-# open(joinpath(@__DIR__, "mtk_specSep_r2_test.jls"), "w") do f
-#     serialize(f, chain)
-# end
+open(joinpath(@__DIR__, "mtk_specSep_r4_cleaned.jls"), "w") do f
+    serialize(f, chain)
+end
