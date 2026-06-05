@@ -31,10 +31,8 @@ function run_inference(model::Model, spec::TuringSpec)
     results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
     prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
 
-    priors = arraydist(model.tunable_priors)
-    
     # 2. Build turing model
-    fit_fcn = fit(model, spec, priors, spec.data; 
+    fit_fcn = fit(model, spec, model.tunable_priors, spec.data; 
         prealloc_results_vector=prealloc_results_vector)
     #fit_fcn = optim_model()
 
@@ -62,6 +60,12 @@ function run_inference(model::Model, spec::TuringSpec)
 end
 
 function make_initial_params(model::Model, spec::TuringSpec)
+    validate_initial_tunables(
+        model.tunable_symbols,
+        model.tunable_initial,
+        make_priors(model),
+    )
+
     initial_params = InitFromParams((
         σ=spec.noise_initial,
         uncertain_sampled_values=collect(model.tunable_initial),

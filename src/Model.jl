@@ -364,9 +364,8 @@ function setup_simulation!(model::Model,
 
     model.tunable_symbols = Tuple(Symbolics.tosymbol(p) for p in tunable_params)
     tunable_priors = make_priors(model)
-    model.tunable_priors = tunable_priors
+    model.tunable_priors = arraydist(tunable_priors)
     model.tunable_initial = get_initial_tunables(model)
-    validate_initial_tunables(model.tunable_symbols, model.tunable_initial, tunable_priors)
     
     @info "Model built and compiled..."
 
