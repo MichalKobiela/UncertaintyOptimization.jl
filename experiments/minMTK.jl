@@ -21,8 +21,20 @@ using AdvancedHMC: DenseEuclideanMetric
 Random.seed!(0);
 
 
-# const SOLVER = autoTsit5(Rosenbrock23(autodiff=false))
-const SOLVER = Rosenbrock23(autodiff=false)
+const SOLVER = AutoTsit5(Rosenbrock23(autodiff=false))
+# const SOLVER = Rosenbrock23(autodiff=AutoForwardDiff())
+# const SOLVER = Rosenbrock23(autodiff=AutoReverseDiff(compile=false), concrete_jac = true)
+# const SOLVER = Rosenbrock23(autodiff=false)
+
+# const SOLVER = AutoTsit5(
+#     Rosenbrock23(autodiff=AutoForwardDiff());
+#     stiffalgfirst = true,
+#     maxstiffstep = 1,
+#     maxnonstiffstep = 1000,
+#     nonstifftol = 0.1,
+#     stifftol = 0.1,
+#     dtfac = 1,
+# )
 
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true]
@@ -69,7 +81,7 @@ ordered_params = [p for p in parameters(ns)]
 
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
-    :alpha_2 => 391.1627, #  20.0, # 391.1627,
+    :alpha_2 => 25.0, # 391.1627,
     :alpha_3 => 17.7437,
     :alpha_4 => 8.7519e6,
     :beta_1  => 11.9586,
@@ -109,8 +121,8 @@ prior_map = Dict{Symbol,Distribution}(
 )
 
 u0 = [A => 24.0, B => 350.0]
-init_params = Dict([p => guess_map[p.name] for p in ordered_params])
-prob = ODEProblem(ns, merge(Dict(u0), init_params), (0.0, 10.0), jac=true, simplify=false)
+initial_params = Dict([p => guess_map[p.name] for p in ordered_params])
+prob = ODEProblem(ns, merge(Dict(u0), initial_params), (0.0, 10.0), jac=true, simplify=false)
 
 # prepare cuma setter and priors
 tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
@@ -178,14 +190,14 @@ data_subset = vcat(data[:,2], data[:,5], data[:,9])
 
 model = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
 
-init_params_draws = Dict(
-    :σ => 3.0,
-    :draws => [guess_map[p.name] for p in tunable_params],
+initial_params_draws = (;
+    σ = 3.0,
+    draws = [guess_map[p.name] for p in tunable_params],
 )
 
 Random.seed!(4)
-sampler = NUTS(0.5,init_ϵ = 0.003, metricT = DenseEuclideanMetric)
-chain_1 = sample(model, sampler , MCMCSerial(), 3, 1, init_params = init_params_draws)
+sampler = NUTS(0.5,init_ϵ = 0.005, metricT = DenseEuclideanMetric)
+chain_1 = sample(model, sampler , MCMCSerial(), 3, 1, initial_params = [InitFromParams(initial_params_draws)])
 
 rename_map = Dict(
     Symbol("draws[$i]") => tunable_params[i].name
@@ -193,7 +205,6 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_r2_dem_j12.6local_test.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r11_correctInitials_test.jls", "w")
 serialize(f, chain_named)
 close(f)
-
