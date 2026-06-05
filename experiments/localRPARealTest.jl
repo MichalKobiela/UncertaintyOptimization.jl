@@ -71,6 +71,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_specSep_r4_cleaned.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a1.jls"), "w") do f
     serialize(f, chain)
 end

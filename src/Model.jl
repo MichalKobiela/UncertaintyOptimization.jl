@@ -189,6 +189,9 @@ function simulate!(model::Model,
 
     prob = model.prob
     multiparam_length = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
+    if isnothing(prealloc_results_vector)
+        prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
+    end
 
     if !isnothing(sampled_uncertain_params)
         p_work = replace(Tunable(), prob.p, sampled_uncertain_params)
@@ -198,9 +201,6 @@ function simulate!(model::Model,
         # ? - we could set the cuma parameter here accordingly (in the warmup stage)
         # this way we won't have to rely on the "original container settings"
         p_work = deepcopy(prob.p)
-
-        # FIXME - consider an inner function depending on the parameters present, but most likely this preallocaiton is redundant
-        prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
     end
 
     if !isempty(model.warmup_values)
@@ -345,21 +345,28 @@ function setup_simulation!(model::Model,
         end
     end
 
-    # we have to flip the values so that the first set contains the first column
-    multiparam_values_flipped = [collect(x) for x in zip(multiparam_values...)]
-    # extract the actual values and structure them in the right order
-    # these will be used later with the psetter
-    model.multiparam_values = Tuple(Tuple.(multiparam_values_flipped))
+    if isempty(multiparams)
+        model.multiparam_values = ()
+        model.multiparam_setter! = nothing
+    else
+        # we have to flip the values so that the first set contains the first column
+        multiparam_values_flipped = [collect(x) for x in zip(multiparam_values...)]
+        # extract the actual values and structure them in the right order
+        # these will be used later with the psetter
+        model.multiparam_values = Tuple(Tuple.(multiparam_values_flipped))
 
-    # setter for multiparams
-    model.multiparam_setter! = setp(model.sys, multiparams_Nums)
+        # setter for multiparams
+        model.multiparam_setter! = setp(model.sys, multiparams_Nums)
+    end
 
     ## tunable
     tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
 
     model.tunable_symbols = Tuple(Symbolics.tosymbol(p) for p in tunable_params)
-    model.tunable_priors = arraydist(make_priors(model))
+    tunable_priors = make_priors(model)
+    model.tunable_priors = tunable_priors
     model.tunable_initial = get_initial_tunables(model)
+    validate_initial_tunables(model.tunable_symbols, model.tunable_initial, tunable_priors)
     
     @info "Model built and compiled..."
 
@@ -379,7 +386,7 @@ function make_priors(model::Model)::Vector{Uniform{Float64}}
         for (param_symbol, param_spec) in model.model_def.parameters
             if param_symbol == s
                 if param_spec.role != :uncertain
-                    error("A found uncertain parameter $symbol is not uncertain")
+                    error("A found uncertain parameter $s is not uncertain")
                 end
 
                 priors[i] = make_prior(param_spec.prior)
@@ -412,9 +419,9 @@ function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
         for (param_symbol, param_spec) in model.model_def.parameters
             if param_symbol == s
                 if isnothing(param_spec.value)
-                    error("No initial value found for uncertain parameter $symbol. Provide it in the YAML or via spec.simulation.uncertain_param_values.")
+                    error("No initial value found for uncertain parameter $s. Provide it in the YAML or via spec.simulation.uncertain_param_values.")
                 elseif param_spec.value isa Tuple || param_spec.value isa AbstractArray
-                    error("Uncertain parameter $symbol has a non-scalar initial value, which is not supported for Turing initialisation.")
+                    error("Uncertain parameter $s has a non-scalar initial value, which is not supported for Turing initialisation.")
                 end
 
                 initial_tunable_values[i] = float(param_spec.value)
@@ -423,4 +430,14 @@ function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
     end
 
     return Tuple(initial_tunable_values)
+end
+
+function validate_initial_tunables(symbols, initial_values, priors)
+    for (s, initial_value, prior) in zip(symbols, initial_values, priors)
+        if !isfinite(logpdf(prior, initial_value))
+            error("Initial value for uncertain parameter $s is outside its prior support: value=$initial_value, prior=$prior.")
+        end
+    end
+
+    return nothing
 end

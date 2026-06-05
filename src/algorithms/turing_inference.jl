@@ -24,12 +24,14 @@ function run_inference(model::Model, spec::TuringSpec)
     # settable_params::Union{Nothing, Tuple{Vararg{Num}}}
 
     # prepare priors for the uncertain parameters
-    priors = make_priors(model)
+
     initial_params = make_initial_params(model, spec)
 
     # preallocate for the hot loop the results vector
     results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
     prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
+
+    priors = arraydist(model.tunable_priors)
     
     # 2. Build turing model
     fit_fcn = fit(model, spec, priors, spec.data; 
@@ -46,7 +48,7 @@ function run_inference(model::Model, spec::TuringSpec)
         spec.n_samples,
         spec.n_chains;
         progress=true,
-        init_params=initial_params
+        initial_params=initial_params
     )
 
 
@@ -59,11 +61,13 @@ function run_inference(model::Model, spec::TuringSpec)
     return chain_named
 end
 
-function make_initial_params(model::Model, spec::TuringSpec)::Dict{Symbol, Any}
-    return Dict(
-        :σ => spec.noise_initial,
-        :uncertain_sampled_values => model.tunable_initial,
-    )
+function make_initial_params(model::Model, spec::TuringSpec)
+    initial_params = InitFromParams((
+        σ=spec.noise_initial,
+        uncertain_sampled_values=collect(model.tunable_initial),
+    ))
+
+    return fill(initial_params, spec.n_chains)
 end
 
 # -------------------------------------------------------------------------
@@ -85,7 +89,7 @@ end
     σ ~ spec.noise_prior
      
     # FIXME - move arraydist to the outside
-    uncertain_sampled_values ~ arraydist(collect(uncertain_priors))
+    uncertain_sampled_values ~ uncertain_priors
 
     simulation = spec.simulation
 

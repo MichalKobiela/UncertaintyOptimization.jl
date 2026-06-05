@@ -32,8 +32,8 @@ parameters:
       upper: 2000.0
 
   alpha_2:
-    # value: 10.0
-    value: 391.1627
+    value: 25.0
+    # value: 391.1627
     role: uncertain
     prior:
       distribution: uniform

@@ -1,6 +1,7 @@
 using Test
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t
+using OrdinaryDiffEq
 include("helpers/mock_rpa.jl")
 using .MockRPA
 
@@ -14,7 +15,7 @@ using .MockRPA
 
         model = UncertaintyOptimization.Model(model_def, sys)
 
-        u0 = [1.0, 1.0]
+        u0 = (1.0, 1.0)
 
         params = Dict(
             :beta_RA => 0.1,
@@ -26,7 +27,7 @@ using .MockRPA
         tspan = (0.0, 100.0) 
             
         # Run simulation
-        sol = simulate!(model, u0, params, tspan)
+        sol = simulate!(model, u0, tspan; parameters=params)
             
         # Check that solution exists
         @test sol !== nothing
@@ -49,13 +50,30 @@ using .MockRPA
             :beta_BB => 0.001
         )
         
+        tspan = (0.0, 100.0)
+
         UncertaintyOptimization.setup_simulation!(
-            model, t_obs, 1, [1.0, 1.0], params, (0.0, 100.0)
+            model,
+            (1.0, 1.0),
+            tspan;
+            parameters=params,
         )
-        
-        # Call evaluate with uncertain params
-        # Order: beta_RA, beta_AB, beta_BA, beta_BB
-        predicted = UncertaintyOptimization.evaluate_model(model, [0.1, 0.1, 0.1, 0.1])
+
+        @test model.prob !== nothing
+
+        # Call simulate with uncertain params.
+        predicted_sol = simulate!(
+            model,
+            (1.0, 1.0),
+            tspan;
+            solver=Euler(),
+            solver_opts=(dt=0.01,),
+            saveat=t_obs,
+            save_idxs=1,
+            sampled_uncertain_params=[0.1, 0.1, 0.1, 0.1],
+        )[1]
+
+        predicted = Array(predicted_sol)
         
         @test length(predicted) == length(t_obs)
         @test all(isfinite, predicted)
