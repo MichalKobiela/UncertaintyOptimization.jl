@@ -31,7 +31,7 @@ struct ParameterSpec
     warmup_value:: Union{Nothing, Float64, Tuple{Float64}} # value of the paramater if provided
     bounds::Union{Nothing, Tuple{Float64,Float64}} # bounds for the parameter if provided
     prior:: Union{Nothing, Dict}
-    design:: Union{Design, Nothing}
+    design:: Union{Nothing, Design}
 end
 
 struct ModelDefinition
