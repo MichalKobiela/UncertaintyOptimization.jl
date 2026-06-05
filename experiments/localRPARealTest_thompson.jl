@@ -21,6 +21,7 @@ using Plots
 using DataFrames
 using Profile
 using StatsPlots
+# using SciMLSensitivity
 
 
 Random.seed!(0);
@@ -96,26 +97,6 @@ sim_spec = SimulationSpec(
 # scale - rename to "compute all thompson samples" 
 scan = GridScan(
     simulation = sim_spec,
-    optimise = (parameter = "")
-    scale = "kx2",
-    scalerange = LinRange(0.01, 3, 100),
-    type = min, 
     lossf = loss,
 )
-
-scan = GridScan(
-    simulation = sim_spec,
-    optimise = (
-        (parameter = "kx2", 
-        # find a scaling factor that minimises the loss function
-        scale = LinRange(0.01, 3, 100), 
-        type = min),
-        (parameter = "kx2", 
-        # find a scaling factor that minimises the loss function
-        scale = LinRange(0.01, 3, 100), 
-        type = min)
-        ),
-    lossf = loss,
-)
-
-chain = run_scan(posterior, scan, model)
+chain = run_scan(posterior, scan)
