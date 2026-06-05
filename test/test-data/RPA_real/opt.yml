@@ -124,7 +124,6 @@ parameters:
           value: 0.0003
       optimise:
         LinRange: [0.01, 3, 100]
-        type: min # find and return the value that produces the best loss
 
   nx2:
     value: 1.3
