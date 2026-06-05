@@ -50,7 +50,16 @@ end
             "k1" => Dict("role"=>"fixed","value"=>0.1),
             "k2" => Dict("role"=>"fixed","value"=>0.2),
             "k3" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
-            "k4" => Dict("role"=>"design","bounds"=>[0.0,1.0])
+            "k4" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
+            "cuma" => Dict(
+                "role" => "fixed",
+                "warmup_value" => 2e-6,
+                "value" => 0.0001,
+                "design" => Dict(
+                    "warmup_value" => 2e-6,
+                    "value" => 0.0003,
+                ),
+            )
         ),
         "model" => Dict("states" => ["A", "B"]),
         "inputs" => Dict(
@@ -63,10 +72,17 @@ end
     symbolics = UncertaintyOptimization.build_symbolics(config)
 
 
-    for pname in ["k1", "k2", "k3", "k4"]
+    for pname in ["k1", "k2", "k3", "k4", "cuma"]
         param = Symbol(pname)
         @test isequal(symbolics.parameters[param].symbol, Symbolics.unwrap(first(@parameters $param)))
     end
+
+    @test isnothing(symbolics.parameters[:k1].design)
+    @test symbolics.parameters[:cuma].design isa UncertaintyOptimization.Design
+    @test symbolics.parameters[:cuma].design.warmup_value == 2e-6
+    @test symbolics.parameters[:cuma].design.value == 0.0003
+    @test symbolics.parameters[:cuma].warmup_value == 2e-6
+    @test symbolics.parameters[:cuma].value == 0.0001
 
     for (s_sym, var_obj) in symbolics.states
         @test typeof(var_obj) <: SymbolicUtils.BasicSymbolic
@@ -97,4 +113,3 @@ end
     
     
 end
-
