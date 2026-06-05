@@ -32,7 +32,9 @@ struct ParameterSpec
     bounds::Union{Nothing, Tuple{Float64,Float64}} # bounds for the parameter if provided
     prior:: Union{Nothing, Dict}
     design:: Union{Nothing, Design}
+    design_optimise:: Union{Nothing, Tuple{Vararg{Float64}}}
 end
+
 
 struct ModelDefinition
     model_name::String
@@ -131,10 +133,36 @@ function parse_values(x)
     if isnothing(x)
         return x
     elseif x isa AbstractVector
-        return tuple(value...)
+        return tuple(x...)
     else
         return x
     end
+end
+
+function parse_design_optimise_values(x)::Tuple{Vararg{Float64}}
+    values = if x isa AbstractVector
+        Float64.(x)
+    elseif x isa AbstractString
+        parts = split(x, ":")
+        if length(parts) != 3
+            error("design_optimise.scalers must use start:step:stop notation. Got: $x")
+        end
+
+        start, step, stop = parse.(Float64, strip.(parts))
+        if step == 0.0
+            error("design_optimise.values step must not be zero")
+        end
+
+        collect(start:step:stop)
+    else
+        error("design_optimise.scalers must be either a vector or a start:step:stop string. Got $(typeof(x)).")
+    end
+
+    if isempty(values) || !all(isfinite, values)
+        error("design_optimise.scalers must contain finite values")
+    end
+
+    return tuple(values...)
 end
 
 # -------------------------------------------------------------------------
@@ -162,6 +190,7 @@ function build_symbolics(config::Dict)
         bounds = haskey(pinfo, "bounds") ? tuple(pinfo["bounds"]...) : nothing
         prior = get(pinfo, "prior", nothing)
         design = get(pinfo, "design", nothing)
+        design_optimise = get(pinfo, "design_optimise", nothing)
         
         # either a float or a tuple
         value = parse_values(value) 
@@ -172,7 +201,11 @@ function build_symbolics(config::Dict)
             design = Design(parse_values(design["warmup_value"]), parse_values(design["value"]))
         end
 
-        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior, design)
+        if !isnothing(design_optimise)
+            design_optimise = parse_design_optimise_values(design_optimise["scalers"])
+        end
+
+        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior, design, design_optimise)
     end
 
     # Makes an input signal defined by the YAML
