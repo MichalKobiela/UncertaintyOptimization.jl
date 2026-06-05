@@ -16,6 +16,11 @@ The aim of this module is to be responsible for reading in a YAML and creating t
 # Struct Definitions
 # -------------------------------------------------------------------------
 
+struct Design
+    warmup_value:: Union{Nothing, Float64} 
+    value:: Union{Nothing, Float64, Tuple{Vararg{Float64}}}   
+end
+
 # Currently immutable but we can make them mutable if required later
 struct ParameterSpec
     name::String # paramater name
@@ -26,6 +31,7 @@ struct ParameterSpec
     warmup_value:: Union{Nothing, Float64, Tuple{Float64}} # value of the paramater if provided
     bounds::Union{Nothing, Tuple{Float64,Float64}} # bounds for the parameter if provided
     prior:: Union{Nothing, Dict}
+    design:: Union{Design, Nothing}
 end
 
 struct ModelDefinition
@@ -70,6 +76,7 @@ function create_param(x; tunable::Bool=false)
     sym = Symbol(x)
     Symbolics.unwrap(first(@parameters $sym [tunable = tunable]))
 end
+
 
 """
 
@@ -120,6 +127,16 @@ function validate_YAML(config::Dict)
 
 end
 
+function parse_values(x)
+    if isnothing(x)
+        return x
+    elseif x isa AbstractVector
+        return tuple(value...)
+    else
+        return x
+    end
+end
+
 # -------------------------------------------------------------------------
 # Model Symbolic Construction
 # -------------------------------------------------------------------------
@@ -144,12 +161,18 @@ function build_symbolics(config::Dict)
         warmup_value = get(pinfo, "warmup_value", nothing)
         bounds = haskey(pinfo, "bounds") ? tuple(pinfo["bounds"]...) : nothing
         prior = get(pinfo, "prior", nothing)
+        design = get(pinfo, "design", nothing)
         
-        # if a tuple are detected, convert to a tuple
-        value = value isa AbstractVector ? tuple(value...) : value
-        warmup_value = warmup_value isa AbstractVector ? tuple(warmup_value...) : warmup_value
+        # either a float or a tuple
+        value = parse_values(value) 
+        warmup_value = parse_values(warmup_value)
 
-        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior)
+        # add the design values
+        if !isnothing(design)
+            design = Design(parse_values(design["warmup_value"]), parse_values(design["value"]))
+        end
+
+        param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior, design)
     end
 
     # Makes an input signal defined by the YAML
@@ -160,9 +183,6 @@ function build_symbolics(config::Dict)
     else
         error("❌ Unsupported input signal type: $(config["type"])")
     end
-
-    
-    
 
     return (states=state_map, parameters=param_specs, input=input)
 

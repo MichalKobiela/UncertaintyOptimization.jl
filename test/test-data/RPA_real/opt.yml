@@ -117,13 +117,9 @@ parameters:
       upper: 1e4
     # role: design
     # bounds: [0.0, 1e4]
-    design:
-      parameters:
-        cuma:
-          warmup_value: 2e-6
-          value: 0.0003
-      optimise:
-        LinRange: [0.01, 3, 100]
+    # detects design and gathers info
+    # design:
+    #   LinRange: [0.01, 3, 100]
 
   nx2:
     value: 1.3
@@ -173,6 +169,10 @@ parameters:
     warmup_value: 2e-6
     value: [2e-5, 0.0001, 0.001]
     role: fixed
+    # we specifically encode what values this will have during the design stage
+    design:
+      warmup_value: 2e-6
+      value: 0.0003
 
 inputs:
     type: "step"
