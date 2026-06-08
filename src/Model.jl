@@ -125,21 +125,73 @@ function get_warmup_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpec}; 
     return (warmup_values=Tuple(warmup_values), warmup_Nums=warmup_Nums)
 end
 
-function extract_multiparams(parameters::Dict{Symbol, ParameterSpec})::Dict{Symbol, Tuple{Vararg{Float64}}}
-    multiparams = Dict{Symbol, Tuple{Vararg{Float64}}}()
+const MultiparamValue = Union{Float64, Tuple{Vararg{Float64}}}
+
+function extract_multiparams(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, MultiparamValue}
+    multiparams = Dict{Symbol, MultiparamValue}()
     for kv in pairs(parameters)
-        if kv.second.value isa Union{AbstractArray, Tuple}
-            multiparams[kv.first] = kv.second.value
+        value = if design && !isnothing(kv.second.design)
+            kv.second.design.value
+        else
+            kv.second.value
+        end
+
+        if design
+            if !isnothing(value)
+                multiparams[kv.first] = value
+            end
+        elseif value isa Union{AbstractArray, Tuple}
+            multiparams[kv.first] = Tuple(value)
         end
     end
 
     # check that all array params have the same length
-    lengths = [length(v) for v in values(multiparams)]
+    lengths = [length(v) for v in values(multiparams) if v isa Union{AbstractArray, Tuple}]
     if length(unique(lengths)) > 1
         error("Parameters have value arrays which differ in length. The lengths are", lengths)
     end
 
     multiparams
+end
+
+function get_multiparam_setter_inputs(model::Model; design::Bool=false)
+    return get_multiparam_setter_inputs(model.sys, model.model_def.parameters; design)
+end
+
+function get_multiparam_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)
+    multiparams = extract_multiparams(parameters; design)
+    ordered_params = ModelingToolkit.parameters(sys)
+
+    multiparam_Nums = Vector{Num}(undef, length(multiparams))
+    multiparam_values = Vector{MultiparamValue}(undef, length(multiparams))
+
+    counter = 1
+    for p in ordered_params
+        s = Symbolics.tosymbol(p)
+
+        if haskey(multiparams, s)
+            multiparam_Nums[counter] = getproperty(sys, s)
+            multiparam_values[counter] = multiparams[s]
+            counter += 1
+        end
+    end
+
+    if isempty(multiparams)
+        return (multiparam_values=(), multiparam_Nums=multiparam_Nums)
+    end
+
+    lengths = [length(v) for v in multiparam_values if v isa Union{AbstractArray, Tuple}]
+    multiparam_length = isempty(lengths) ? 1 : only(unique(lengths))
+
+    expanded_values = map(multiparam_values) do value
+        value isa Union{AbstractArray, Tuple} ? Tuple(value) : ntuple(_ -> value, multiparam_length)
+    end
+    multiparam_values_flipped = [collect(x) for x in zip(expanded_values...)]
+
+    return (
+        multiparam_values=Tuple(Tuple.(multiparam_values_flipped)),
+        multiparam_Nums=multiparam_Nums,
+    )
 end
 
 # -------------------------------------------------------------------------
@@ -352,41 +404,16 @@ function setup_simulation!(model::Model,
     model.design_warmup_setter! = setp(model.sys, design_warmup_Nums)
 
     ## multiparams
-    multiparams = extract_multiparams(model.model_def.parameters)
+    multiparam_values, multiparam_Nums = get_multiparam_setter_inputs(model)
+    model.multiparam_values = multiparam_values
+    model.multiparam_setter! = isempty(multiparam_Nums) ? nothing : setp(model.sys, multiparam_Nums)
 
-    # prepare the MTK specific Nums
-    multiparams_Nums = Vector{Num}(undef, length(multiparams))
-    multiparam_values = Vector{Tuple}(undef, length(multiparams))
-
-    ordered_params = ModelingToolkit.parameters(model.sys)
-
-    # add the multiparameter using the MTK order
-    counter = 1
-    for p in ordered_params
-        s = Symbolics.tosymbol(p)
-
-        if haskey(multiparams, s)
-            multiparams_Nums[counter] = getproperty(model.sys, s)
-            multiparam_values[counter] = multiparams[s]
-            counter += 1
-        end
-    end
-
-    if isempty(multiparams)
-        model.multiparam_values = ()
-        model.multiparam_setter! = nothing
-    else
-        # we have to flip the values so that the first set contains the first column
-        multiparam_values_flipped = [collect(x) for x in zip(multiparam_values...)]
-        # extract the actual values and structure them in the right order
-        # these will be used later with the psetter
-        model.multiparam_values = Tuple(Tuple.(multiparam_values_flipped))
-
-        # setter for multiparams
-        model.multiparam_setter! = setp(model.sys, multiparams_Nums)
-    end
+    design_multiparam_values, design_multiparam_Nums = get_multiparam_setter_inputs(model; design=true)
+    model.design_multiparam_values = design_multiparam_values
+    model.design_multiparam_setter! = isempty(design_multiparam_Nums) ? nothing : setp(model.sys, design_multiparam_Nums)
 
     ## tunable
+    ordered_params = ModelingToolkit.parameters(model.sys)
     tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
 
     model.tunable_symbols = Tuple(Symbolics.tosymbol(p) for p in tunable_params)

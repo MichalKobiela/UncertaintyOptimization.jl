@@ -61,6 +61,89 @@ using .MockRPA
     @test Tuple(Symbolics.tosymbol.(design_warmup_inputs.warmup_Nums)) == (:d,)
 end
 
+@testset "Multiparam setter inputs" begin
+    @variables Y(t)
+    cuma = UncertaintyOptimization.create_param("cuma")
+    fallback = UncertaintyOptimization.create_param("fallback")
+    baseline = UncertaintyOptimization.create_param("baseline")
+
+    eqs = [
+        Differential(t)(Y) ~ cuma * fallback * baseline * Y
+    ]
+
+    params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
+        :cuma => UncertaintyOptimization.ParameterSpec(
+            "cuma",
+            cuma,
+            :fixed,
+            (2e-5, 0.0001, 0.001),
+            2e-6,
+            nothing,
+            nothing,
+            UncertaintyOptimization.Design(2e-6, 0.0003),
+            nothing,
+        ),
+        :fallback => UncertaintyOptimization.ParameterSpec(
+            "fallback",
+            fallback,
+            :fixed,
+            (10.0, 20.0, 30.0),
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+        ),
+        :baseline => UncertaintyOptimization.ParameterSpec(
+            "baseline",
+            baseline,
+            :fixed,
+            7.0,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+        ),
+    )
+
+    model_def = UncertaintyOptimization.ModelDefinition(
+        "MultiparamSetterInputs",
+        "Tiny model for multiparam setter preparation",
+        :ODE,
+        eqs,
+        Dict(:Y => Y),
+        params,
+        nothing,
+    )
+
+    @mtkcompile multiparam_setter_sys = System(model_def.equations, t)
+    model = UncertaintyOptimization.Model(model_def, multiparam_setter_sys)
+
+    to_stage_maps(inputs) = begin
+        symbols = Symbolics.tosymbol.(inputs.multiparam_Nums)
+        [Dict(zip(symbols, stage)) for stage in inputs.multiparam_values]
+    end
+
+    multiparam_maps = to_stage_maps(UncertaintyOptimization.get_multiparam_setter_inputs(model))
+    @test length(multiparam_maps) == 3
+    @test multiparam_maps[1][:cuma] == 2e-5
+    @test multiparam_maps[2][:cuma] == 0.0001
+    @test multiparam_maps[3][:cuma] == 0.001
+    @test multiparam_maps[1][:fallback] == 10.0
+    @test multiparam_maps[2][:fallback] == 20.0
+    @test multiparam_maps[3][:fallback] == 30.0
+    @test all(!haskey(stage, :baseline) for stage in multiparam_maps)
+
+    design_multiparam_maps = to_stage_maps(UncertaintyOptimization.get_multiparam_setter_inputs(model; design=true))
+    @test length(design_multiparam_maps) == 3
+    @test all(stage[:cuma] == 0.0003 for stage in design_multiparam_maps)
+    @test design_multiparam_maps[1][:fallback] == 10.0
+    @test design_multiparam_maps[2][:fallback] == 20.0
+    @test design_multiparam_maps[3][:fallback] == 30.0
+    @test all(stage[:baseline] == 7.0 for stage in design_multiparam_maps)
+end
+
 @testset "Test Model simulations" begin
 
     @testset "Test one off simulation" begin
