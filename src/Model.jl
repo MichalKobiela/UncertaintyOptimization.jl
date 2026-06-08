@@ -100,6 +100,31 @@ function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}; design::Bool
     return warmup_map
 end
 
+function get_warmup_setter_inputs(model::Model; design::Bool=false)
+    return get_warmup_setter_inputs(model.sys, model.model_def.parameters; design)
+end
+
+function get_warmup_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)
+    warmup_map = get_warmup_params(parameters; design)
+    ordered_params = ModelingToolkit.parameters(sys)
+
+    warmup_Nums = Vector{Num}(undef, length(warmup_map))
+    warmup_values = Vector{Float64}(undef, length(warmup_map))
+
+    counter = 1
+    for p in ordered_params
+        s = Symbolics.tosymbol(p)
+
+        if haskey(warmup_map, s)
+            warmup_Nums[counter] = getproperty(sys, s)
+            warmup_values[counter] = warmup_map[s]
+            counter += 1
+        end
+    end
+
+    return (warmup_values=Tuple(warmup_values), warmup_Nums=warmup_Nums)
+end
+
 function extract_multiparams(parameters::Dict{Symbol, ParameterSpec})::Dict{Symbol, Tuple{Vararg{Float64}}}
     multiparams = Dict{Symbol, Tuple{Vararg{Float64}}}()
     for kv in pairs(parameters)
@@ -317,27 +342,14 @@ function setup_simulation!(model::Model,
     # Create the problem with all parameters and their starting values
     model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)
 
-    ordered_params = ModelingToolkit.parameters(model.sys)
-
-
     ## warmup
-    warmup_Nums = Vector{Num}(undef, length(warmup_map))
-    # we assume warmup parameters have only one value (no multiple stages)
-    warmup_values = Vector{Float64}(undef, length(warmup_map))
-
-    counter = 1
-    for p in ordered_params
-        s = Symbolics.tosymbol(p)
-
-        if haskey(warmup_map, s)
-            warmup_Nums[counter] = getproperty(model.sys, s)
-            warmup_values[counter] = warmup_map[s]
-            counter += 1
-        end
-    end
-    model.warmup_values = Tuple(warmup_values)
+    warmup_values, warmup_Nums = get_warmup_setter_inputs(model)
+    model.warmup_values = warmup_values
     model.warmup_setter! = setp(model.sys, warmup_Nums)
 
+    design_warmup_values, design_warmup_Nums = get_warmup_setter_inputs(model; design=true)
+    model.design_warmup_values = design_warmup_values
+    model.design_warmup_setter! = setp(model.sys, design_warmup_Nums)
 
     ## multiparams
     multiparams = extract_multiparams(model.model_def.parameters)

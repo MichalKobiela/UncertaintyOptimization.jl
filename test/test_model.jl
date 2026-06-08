@@ -5,6 +5,62 @@ using OrdinaryDiffEq
 include("helpers/mock_rpa.jl")
 using .MockRPA
 
+@testset "Warmup setter inputs" begin
+    @variables X(t)
+    k = UncertaintyOptimization.create_param("k")
+    d = UncertaintyOptimization.create_param("d")
+
+    eqs = [
+        Differential(t)(X) ~ k * X + d
+    ]
+
+    params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
+        :k => UncertaintyOptimization.ParameterSpec(
+            "k",
+            k,
+            :fixed,
+            2.0,
+            1.0,
+            nothing,
+            nothing,
+            UncertaintyOptimization.Design(nothing, 3.0),
+            nothing,
+        ),
+        :d => UncertaintyOptimization.ParameterSpec(
+            "d",
+            d,
+            :fixed,
+            4.0,
+            nothing,
+            nothing,
+            nothing,
+            UncertaintyOptimization.Design(5.0, 6.0),
+            nothing,
+        ),
+    )
+
+    model_def = UncertaintyOptimization.ModelDefinition(
+        "WarmupSetterInputs",
+        "Tiny model for warmup setter preparation",
+        :ODE,
+        eqs,
+        Dict(:X => X),
+        params,
+        nothing,
+    )
+
+    @mtkcompile warmup_setter_sys = System(model_def.equations, t)
+    model = UncertaintyOptimization.Model(model_def, warmup_setter_sys)
+
+    warmup_inputs = UncertaintyOptimization.get_warmup_setter_inputs(model)
+    @test warmup_inputs.warmup_values == (1.0,)
+    @test Tuple(Symbolics.tosymbol.(warmup_inputs.warmup_Nums)) == (:k,)
+
+    design_warmup_inputs = UncertaintyOptimization.get_warmup_setter_inputs(model; design=true)
+    @test design_warmup_inputs.warmup_values == (5.0,)
+    @test Tuple(Symbolics.tosymbol.(design_warmup_inputs.warmup_Nums)) == (:d,)
+end
+
 @testset "Test Model simulations" begin
 
     @testset "Test one off simulation" begin
