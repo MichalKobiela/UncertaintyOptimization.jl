@@ -1,7 +1,7 @@
 using ModelingToolkit
 using OrdinaryDiffEq
 using SymbolicIndexingInterface
-using SciMLStructures: Tunable, canonicalize, replace, replace!, Initials
+using SciMLStructures: Tunable, replace, Initials
 using PreallocationTools
 using Plots
 using ForwardDiff
@@ -248,9 +248,10 @@ Runs a simple one off simulation and stores the results
 - `solver`: ODE solver algorithm (default: Tsit5())
 - `dt`: Time step for solver (default: 0.01)
 - `saveat`: Specific time points to save (default: all points)
+- `return_simulate`: Return the warmup solution together with the production solutions
 
 # Returns
-- The solution object (also stored in model.sol)
+- The production solution vector, or `(warmup_sol=..., sols=...)` when `return_simulate=true`
 
 SHOULD NOT MAKE ALTER THE MODEL!
 
@@ -268,7 +269,8 @@ function simulate!(model::Model,
                    save_idxs::Any = nothing,
                    sampled_uncertain_params::Union{Nothing, AbstractVector} = nothing,
                    multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
-                   prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing
+                   prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing,
+                   return_simulate::Bool = false,
                    )
 
     # build the problem once
@@ -297,6 +299,7 @@ function simulate!(model::Model,
         p_work = deepcopy(prob.p)
     end
 
+    warmup_sol = nothing
     if !isempty(model.warmup_values)
         # Reset warmup parameters on every simulation call. Some parameter containers
         # returned by `replace(Tunable(), ...)` share non-tunable storage with `prob.p`,
@@ -304,10 +307,8 @@ function simulate!(model::Model,
         # warmup solve.
         model.warmup_setter!(p_work, model.warmup_values)
 
-        warm = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
-        p_work = replace(Initials(), p_work, warm.u[end])        
-        # TODO - add the check if the values you modify are indeed indexes 1 and 2 
-        #        some Julia versions move the actual u0 to indexes 2, 3 which breaks replace(Initials()...)
+        warmup_sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
+        p_work = replace(Initials(), p_work, warmup_sol.u[end])
     end
 
     opts_prod = solver_opts
@@ -324,6 +325,10 @@ function simulate!(model::Model,
         sol = solve(prob, solver; p=p_work, opts_prod...)
 
         prealloc_results_vector[i] = sol
+    end
+
+    if return_simulate
+        return (warmup_sol=warmup_sol, sols=prealloc_results_vector)
     end
 
     return prealloc_results_vector

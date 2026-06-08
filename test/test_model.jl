@@ -171,6 +171,10 @@ end
         # Check that solution exists
         @test sol !== nothing
 
+        sol_with_warmup = simulate!(model, u0, tspan; parameters=params, return_simulate=true)
+        @test sol_with_warmup.warmup_sol === nothing
+        @test sol_with_warmup.sols !== nothing
+
     end
 
     @testset "Test setup simulation" begin
