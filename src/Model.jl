@@ -39,6 +39,12 @@ mutable struct Model
     # the ordered "lists" of values for the setter
     # the first tuple has the values across all parameters for the first part
     multiparam_values::Tuple{Vararg{Tuple}}
+
+    ## separately prepare the setters for design stage
+    design_warmup_setter!::Any
+    design_warmup_values::Tuple{Vararg{Float64}}
+    design_multiparam_setter!::Any
+    design_multiparam_values::Tuple{Vararg{Tuple}}
     
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
@@ -48,7 +54,12 @@ mutable struct Model
         # warmup
         nothing, () :: Tuple{Vararg{Float64}},
         # multiparams
-        nothing, () :: Tuple{Vararg{Float64}})
+        nothing, () :: Tuple{Vararg{Float64}},
+        # design warmup
+        nothing, () :: Tuple{Vararg{Float64}},
+        # design multiparam
+        nothing, () :: Tuple{Vararg{Float64}},
+        )
     end
 end
 # ----------------------------------------------------------s---------------
@@ -71,12 +82,18 @@ function get_uncertain_parameters(model::Model)
     return uncertain
 end
 
-function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}):: Dict{Symbol, Float64}
+function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, Float64}
     # check for a warm up stage, and start with warm up values
     warmup_map = Dict{Symbol, Float64}()
     for kv in pairs(parameters)
-        if !isnothing(kv.second.warmup_value)
-            warmup_map[kv.first] = kv.second.warmup_value
+        warmup_value = if design
+            isnothing(kv.second.design) ? nothing : kv.second.design.warmup_value
+        else
+            kv.second.warmup_value
+        end
+
+        if !isnothing(warmup_value)
+            warmup_map[kv.first] = warmup_value
         end
     end
 
@@ -304,8 +321,6 @@ function setup_simulation!(model::Model,
 
 
     ## warmup
-    # TODO - finding warmup ideally is done after being set in model struct
-    warmup_settable = Vector{Pair{Int32, Float64}}(undef, length(warmup_map))
     warmup_Nums = Vector{Num}(undef, length(warmup_map))
     # we assume warmup parameters have only one value (no multiple stages)
     warmup_values = Vector{Float64}(undef, length(warmup_map))

@@ -198,7 +198,7 @@ function build_symbolics(config::Dict)
 
         # add the design values
         if !isnothing(design)
-            design = Design(parse_values(design["warmup_value"]), parse_values(design["value"]))
+            design = Design(parse_values(get(design, "warmup_value", nothing)), parse_values(design["value"]))
         end
 
         if !isnothing(design_optimise)

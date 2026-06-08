@@ -51,6 +51,13 @@ end
             "k2" => Dict("role"=>"fixed","value"=>0.2),
             "k3" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
             "k4" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
+            "k5" => Dict(
+                "role" => "fixed",
+                "value" => 0.5,
+                "design" => Dict(
+                    "value" => 0.6,
+                ),
+            ),
             "kx2" => Dict(
                 "role" => "uncertain",
                 "value" => 36.4063,
@@ -91,7 +98,7 @@ end
     symbolics = UncertaintyOptimization.build_symbolics(config)
 
 
-    for pname in ["k1", "k2", "k3", "k4", "kx2", "kx3", "cuma"]
+    for pname in ["k1", "k2", "k3", "k4", "k5", "kx2", "kx3", "cuma"]
         param = Symbol(pname)
         @test isequal(symbolics.parameters[param].symbol, Symbolics.unwrap(first(@parameters $param)))
     end
@@ -103,6 +110,10 @@ end
     @test symbolics.parameters[:cuma].design.value == 0.0003
     @test symbolics.parameters[:cuma].warmup_value == 2e-6
     @test symbolics.parameters[:cuma].value == 0.0001
+    @test isnothing(symbolics.parameters[:k5].design.warmup_value)
+    @test symbolics.parameters[:k5].design.value == 0.6
+    @test UncertaintyOptimization.get_warmup_params(symbolics.parameters) == Dict(:cuma => 2e-6)
+    @test UncertaintyOptimization.get_warmup_params(symbolics.parameters; design=true) == Dict(:cuma => 2e-6)
     @test symbolics.parameters[:kx2].design_optimise == (1.0, 2.0, 3.0, 4.0)
     @test symbolics.parameters[:kx3].design_optimise == (0.1, 0.13, 0.16)
 

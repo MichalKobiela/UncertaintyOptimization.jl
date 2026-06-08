@@ -56,30 +56,31 @@ function mock_rpa_model()
 
     # Build ParameterSpec dict reflecting YAML (role, values, bounds, prior dict)
     params = Dict{Symbol, ParameterSpec}()
+    parameter_spec(args...) = ParameterSpec(args..., nothing, nothing)
 
     # design params
-    params[:alpha_1] = ParameterSpec("alpha_1", alpha_1, :design, 100.0, nothing, (10.0,200.0), nothing)
-    params[:alpha_2] = ParameterSpec("alpha_2", alpha_2, :design, 100.0, nothing, (10.0,200.0), nothing)
-    params[:K_BA]    = ParameterSpec("K_BA",    K_BA,    :design, 1.0, nothing, (0.1,10.0), nothing)
-    params[:K_AB]    = ParameterSpec("K_AB",    K_AB,    :design, 1.0, nothing, (0.1,10.0), nothing)
-    params[:K_BB]    = ParameterSpec("K_BB",    K_BB,    :design, 1.0, nothing, (0.1,10.0), nothing)
+    params[:alpha_1] = parameter_spec("alpha_1", alpha_1, :design, 100.0, nothing, (10.0,200.0), nothing)
+    params[:alpha_2] = parameter_spec("alpha_2", alpha_2, :design, 100.0, nothing, (10.0,200.0), nothing)
+    params[:K_BA]    = parameter_spec("K_BA",    K_BA,    :design, 1.0, nothing, (0.1,10.0), nothing)
+    params[:K_AB]    = parameter_spec("K_AB",    K_AB,    :design, 1.0, nothing, (0.1,10.0), nothing)
+    params[:K_BB]    = parameter_spec("K_BB",    K_BB,    :design, 1.0, nothing, (0.1,10.0), nothing)
 
     # uncertain params with priors
     uniform_prior = Dict("distribution"=>"uniform","lower"=>0.0,"upper"=>1.0)
-    params[:beta_RA] = ParameterSpec("beta_RA", beta_RA, :uncertain, 0.0, nothing, nothing, uniform_prior)
-    params[:beta_AB] = ParameterSpec("beta_AB", beta_AB, :uncertain, 0.0, nothing, nothing, uniform_prior)
-    params[:beta_BA] = ParameterSpec("beta_BA", beta_BA, :uncertain, 0.0, nothing, nothing, uniform_prior)
-    params[:beta_BB] = ParameterSpec("beta_BB", beta_BB, :uncertain, 0.0, nothing, nothing, uniform_prior)
+    params[:beta_RA] = parameter_spec("beta_RA", beta_RA, :uncertain, 0.0, nothing, nothing, uniform_prior)
+    params[:beta_AB] = parameter_spec("beta_AB", beta_AB, :uncertain, 0.0, nothing, nothing, uniform_prior)
+    params[:beta_BA] = parameter_spec("beta_BA", beta_BA, :uncertain, 0.0, nothing, nothing, uniform_prior)
+    params[:beta_BB] = parameter_spec("beta_BB", beta_BB, :uncertain, 0.0, nothing, nothing, uniform_prior)
 
     # fixed params
-    params[:gamma_A] = ParameterSpec("gamma_A", gamma_A, :fixed, 1.0, nothing, nothing, nothing)
-    params[:gamma_B] = ParameterSpec("gamma_B", gamma_B, :fixed, 1.0, nothing, nothing, nothing)
-    params[:n_RA]    = ParameterSpec("n_RA",    n_RA,    :fixed, 1.0, nothing, nothing, nothing)
-    params[:n_BA]    = ParameterSpec("n_BA",    n_BA,    :fixed, 1.0, nothing, nothing, nothing)
-    params[:n_AB]    = ParameterSpec("n_AB",    n_AB,    :fixed, 1.0, nothing, nothing, nothing)
-    params[:n_BB]    = ParameterSpec("n_BB",    n_BB,    :fixed, 1.0, nothing, nothing, nothing)
-    params[:K_IR]    = ParameterSpec("K_IR",    K_IR,    :fixed, 1.0, nothing, nothing, nothing)
-    params[:K_TF]    = ParameterSpec("K_TF",    K_TF,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:gamma_A] = parameter_spec("gamma_A", gamma_A, :fixed, 1.0, nothing, nothing, nothing)
+    params[:gamma_B] = parameter_spec("gamma_B", gamma_B, :fixed, 1.0, nothing, nothing, nothing)
+    params[:n_RA]    = parameter_spec("n_RA",    n_RA,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:n_BA]    = parameter_spec("n_BA",    n_BA,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:n_AB]    = parameter_spec("n_AB",    n_AB,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:n_BB]    = parameter_spec("n_BB",    n_BB,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:K_IR]    = parameter_spec("K_IR",    K_IR,    :fixed, 1.0, nothing, nothing, nothing)
+    params[:K_TF]    = parameter_spec("K_TF",    K_TF,    :fixed, 1.0, nothing, nothing, nothing)
 
     states = Dict(:A => A, :B => B)
 
