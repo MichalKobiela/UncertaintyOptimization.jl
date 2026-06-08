@@ -45,43 +45,34 @@ end
 # for each posterior sample check what is the best kx2 scaling factor
 # now these will be reserved keywords, 
 # so warmup_sol and predicted_sol will contain the data necessary  
-function loss(warmup_sol, predicted_sol)
+function loss(warmup_sol, predicted_sol; sys=nothing)
     # define the loss function using the outputs from warmup and predicted
 
-    # we previously only saved one state, 
-    # FIXME - show how to find the variable
-    stateA = 1
+    isnothing(sys) && error("loss requires the model system as `sys` to locate state A.")
+
+    A = getproperty(sys, :A)
+    state_order = unknowns(sys)
+    A_idx = findfirst(isequal(A), state_order)
+    isnothing(A_idx) && error("State A was not found in the model unknown order.")
 
     background_fluorescence = 17.6
-    adjusted_predicted = predicted_sol[stateA, end] + background_fluorescence
-    warmup = warmup_sol[stateA, end] + background_fluorescence
+    sol_end_state(sol, state_idx) = begin
+        values = Array(sol)
+        if ndims(values) == 1
+            state_idx == 1 || error("Solution only contains one saved state, but requested state index $state_idx.")
+            return values[end]
+        end
+
+        return values[state_idx, end]
+    end
+
+    adjusted_predicted = sol_end_state(predicted_sol, A_idx) + background_fluorescence
+    warmup = sol_end_state(warmup_sol, A_idx) + background_fluorescence
     
     target = 50
     (((warmup - target).^2) + (adjusted_predicted - target).^2) / 2
 end
 
-
-# so this is what will go into a grid spec
-# and we will have to pass the loss funtion to it? 
-# so parameters:
-# - posterior
-# - grid
-# - loss function
-function reallynothere()
-    thompson_samples = []
-    for row in eachrow(posterior)
-        # the fixed values should come from the setup, 
-        # whereas the tunables should be used for evaluation
-
-        # optimize loss
-        values = collect(LinRange(0.01, 3, 100))
-        loss_post = x -> loss(row, x)
-        losses = loss_post.(values)
-        min_loss_index = argmin(losses)
-
-        push!(thompson_samples, values[min_loss_index])
-    end
-end
 
 sim_spec = SimulationSpec(
     t_obs = time,
@@ -97,6 +88,8 @@ sim_spec = SimulationSpec(
 # scale - rename to "compute all thompson samples" 
 scan = GridScan(
     simulation = sim_spec,
+    scale = :kx2,
+    linrange = LinRange(0.01, 3, 100),
     lossf = loss,
 )
-chain = run_scan(posterior, scan)
+chain = run_scan(posterior, scan, model)

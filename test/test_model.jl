@@ -144,6 +144,84 @@ end
     @test all(stage[:baseline] == 7.0 for stage in design_multiparam_maps)
 end
 
+@testset "Grid scan default evaluator" begin
+    @variables X(t)
+    k = UncertaintyOptimization.create_param("k"; tunable=true)
+    d = UncertaintyOptimization.create_param("d")
+
+    eqs = [
+        Differential(t)(X) ~ k * X + d
+    ]
+
+    params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
+        :k => UncertaintyOptimization.ParameterSpec(
+            "k",
+            k,
+            :uncertain,
+            1.0,
+            nothing,
+            nothing,
+            Dict("distribution" => "uniform", "lower" => 0.0, "upper" => 10.0),
+            nothing,
+            nothing,
+        ),
+        :d => UncertaintyOptimization.ParameterSpec(
+            "d",
+            d,
+            :fixed,
+            0.0,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+        ),
+    )
+
+    model_def = UncertaintyOptimization.ModelDefinition(
+        "GridScanDefaultEvaluator",
+        "Tiny model for grid scan default evaluator",
+        :ODE,
+        eqs,
+        Dict(:X => X),
+        params,
+        nothing,
+    )
+
+    @mtkcompile grid_scan_sys = System(model_def.equations, t)
+    model = UncertaintyOptimization.Model(model_def, grid_scan_sys)
+
+    sim_spec = UncertaintyOptimization.SimulationSpec(
+        t_obs = [0.0, 0.5],
+        obs_state_idx = 1,
+        initial_conditions = (1.0,),
+        tspan = (0.0, 0.5),
+        solver = Tsit5(),
+    )
+
+    loss_calls = Ref(0)
+    loss = function(warmup_sol, predicted_sol; sys=nothing)
+        loss_calls[] += 1
+        @test sys === model.sys
+        @test warmup_sol === nothing
+        @test predicted_sol !== nothing
+        return sum(Array(predicted_sol))
+    end
+
+    scan = UncertaintyOptimization.GridScan(
+        simulation = sim_spec,
+        scale = :k,
+        linrange = [1.0, 2.0],
+        lossf = loss,
+    )
+
+    results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], scan, model)
+
+    @test length(results) == 1
+    @test length(results[1].losses) == 2
+    @test loss_calls[] == 2
+end
+
 @testset "Test Model simulations" begin
 
     @testset "Test one off simulation" begin

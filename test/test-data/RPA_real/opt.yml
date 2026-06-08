@@ -117,8 +117,6 @@ parameters:
       upper: 1e4
     # role: design
     # bounds: [0.0, 1e4]
-    design_optimise:  # find the best kx2 across the scalers
-      scalers: 0.01:0.03:3
 
   nx2:
     value: 1.3

@@ -249,6 +249,7 @@ Runs a simple one off simulation and stores the results
 - `dt`: Time step for solver (default: 0.01)
 - `saveat`: Specific time points to save (default: all points)
 - `return_simulate`: Return the warmup solution together with the production solutions
+- `design`: Use the design-stage warmup and multiparameter values
 
 # Returns
 - The production solution vector, or `(warmup_sol=..., sols=...)` when `return_simulate=true`
@@ -271,6 +272,7 @@ function simulate!(model::Model,
                    multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
                    prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing,
                    return_simulate::Bool = false,
+                   design::Bool = false,
                    )
 
     # build the problem once
@@ -284,7 +286,12 @@ function simulate!(model::Model,
     end
 
     prob = model.prob
-    multiparam_length = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
+    warmup_values = design ? model.design_warmup_values : model.warmup_values
+    warmup_setter! = design ? model.design_warmup_setter! : model.warmup_setter!
+    stage_multiparam_values = design ? model.design_multiparam_values : model.multiparam_values
+    stage_multiparam_setter! = design ? model.design_multiparam_setter! : model.multiparam_setter!
+
+    multiparam_length = isempty(stage_multiparam_values) ? 1 : length(stage_multiparam_values)
     if isnothing(prealloc_results_vector)
         prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, multiparam_length)
     end
@@ -300,12 +307,12 @@ function simulate!(model::Model,
     end
 
     warmup_sol = nothing
-    if !isempty(model.warmup_values)
+    if !isempty(warmup_values)
         # Reset warmup parameters on every simulation call. Some parameter containers
         # returned by `replace(Tunable(), ...)` share non-tunable storage with `prob.p`,
         # so production-stage multiparameter updates can otherwise leak into the next
         # warmup solve.
-        model.warmup_setter!(p_work, model.warmup_values)
+        warmup_setter!(p_work, warmup_values)
 
         warmup_sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
         p_work = replace(Initials(), p_work, warmup_sol.u[end])
@@ -318,8 +325,8 @@ function simulate!(model::Model,
     for i in 1:multiparam_length
 
         # set all multiparameters
-        if !isempty(model.multiparam_values)
-            model.multiparam_setter!(p_work, model.multiparam_values[i])
+        if !isempty(stage_multiparam_values)
+            stage_multiparam_setter!(p_work, stage_multiparam_values[i])
         end
 
         sol = solve(prob, solver; p=p_work, opts_prod...)
