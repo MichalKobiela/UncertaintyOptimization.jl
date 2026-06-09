@@ -210,7 +210,7 @@ end
 
     scan = UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        scale = :k,
+        symbol = :k,
         values = 1:2,
         lossf = loss,
     )
@@ -218,15 +218,17 @@ end
     results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], scan, model)
 
     @test scan.values == [1.0, 2.0]
+    @test scan.symbol == :k
     @test scan.kind == :scale
     @test length(results) == 1
+    @test results[1].symbol == :k
     @test results[1].kind == :scale
     @test length(results[1].losses) == 2
     @test loss_calls[] == 2
 
     value_scan = UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        scale = :k,
+        symbol = :k,
         values = [2.0],
         kind = :value,
         lossf = loss,
@@ -245,7 +247,7 @@ end
     @test value_params == [2.0]
     @test_throws ErrorException UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        scale = :k,
+        symbol = :k,
         values = [2.0],
         kind = :replace,
         lossf = loss,

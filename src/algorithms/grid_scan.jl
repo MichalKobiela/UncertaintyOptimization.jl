@@ -7,7 +7,7 @@ Run a one-dimensional grid scan for each sample in `samples` using `spec.values`
 
 By default, each candidate is evaluated with `simulate!` using the settings from
 `spec.simulation`. The posterior sample is converted into the model's tunable parameter
-order, `spec.scale` is updated according to `spec.kind`, and the loss is evaluated as:
+order, `spec.symbol` is updated according to `spec.kind`, and the loss is evaluated as:
 
 ```julia
 sim = simulate!(model, ...; sampled_uncertain_params=params, design=true, return_simulate=true)
@@ -69,7 +69,7 @@ function run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
         push!(results, (
             sample_index = sample_index,
             sample = one_posterior,
-            scale = spec.scale,
+            symbol = spec.symbol,
             kind = spec.kind,
             best_value = spec.values[best_index],
             best_loss = losses[best_index],
@@ -115,7 +115,7 @@ function _default_grid_scan_evaluator(one_posterior, grid_value, spec::GridScan,
     simulation = spec.simulation
 
     sampled_uncertain_params = _sampled_uncertain_params(model, one_posterior)
-    _apply_grid_value!(sampled_uncertain_params, model, spec.scale, grid_value, spec.kind)
+    _apply_grid_value!(sampled_uncertain_params, model, spec.symbol, grid_value, spec.kind)
 
     sim = simulate!(
         model,
@@ -165,18 +165,18 @@ function _sample_value(one_posterior, symbol::Symbol)
     end
 end
 
-function _apply_grid_value!(sampled_uncertain_params, model::Model, scale::Union{Nothing, Symbol}, grid_value, kind::Symbol)
-    isnothing(scale) && return sampled_uncertain_params
+function _apply_grid_value!(sampled_uncertain_params, model::Model, symbol::Union{Nothing, Symbol}, grid_value, kind::Symbol)
+    isnothing(symbol) && return sampled_uncertain_params
 
-    scale_index = findfirst(==(scale), model.tunable_symbols)
-    if isnothing(scale_index)
-        error("GridScan.scale $scale is not one of the model tunable parameters: $(model.tunable_symbols).")
+    symbol_index = findfirst(==(symbol), model.tunable_symbols)
+    if isnothing(symbol_index)
+        error("GridScan.symbol $symbol is not one of the model tunable parameters: $(model.tunable_symbols).")
     end
 
     if kind === :scale
-        sampled_uncertain_params[scale_index] *= Float64(grid_value)
+        sampled_uncertain_params[symbol_index] *= Float64(grid_value)
     elseif kind === :value
-        sampled_uncertain_params[scale_index] = Float64(grid_value)
+        sampled_uncertain_params[symbol_index] = Float64(grid_value)
     else
         error("GridScan.kind must be either :scale or :value. Got :$kind.")
     end

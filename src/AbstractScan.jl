@@ -5,16 +5,16 @@ Specification for grid-scan style inference/optimisation.
 
 Uses a shared `SimulationSpec` for simulation settings, plus:
 
-- `scale`: parameter to scan/scale, as a `Symbol` or `String`
+- `symbol`: parameter to scan, as a `Symbol` or `String`
 - `values`: scalers to scan over
-- `kind`: `:scale` multiplies `scale` by each value, `:value` sets `scale` to each value
+- `kind`: `:scale` multiplies `symbol` by each value, `:value` sets `symbol` to each value
 - `lossf`: user-provided loss function used to score a scan candidate
 
 Example
 ```julia
 spec = GridScan(
     simulation = sim_spec,
-    scale = "kx2",
+    symbol = "kx2",
     values = LinRange(0.01, 3, 100),
     kind = :scale,
     lossf = loss,
@@ -33,14 +33,14 @@ struct GridScan <: ScanSpec
     simulation::SimulationSpec
 
     # actual grid scan params
-    scale::Union{Nothing, Symbol}
+    symbol::Union{Nothing, Symbol}
     values::Vector{Float64}
     kind::Symbol
     lossf::Any
 
     function GridScan(;
         simulation::SimulationSpec,
-        scale::Union{Nothing, Symbol, AbstractString} = nothing,
+        symbol::Union{Nothing, Symbol, AbstractString} = nothing,
         values = Float64[],
         kind::Union{Symbol, AbstractString} = :scale,
         lossf,
@@ -50,7 +50,7 @@ struct GridScan <: ScanSpec
             error("GridScan.values must contain finite values")
         end
 
-        scale_symbol = isnothing(scale) ? nothing : Symbol(scale)
+        scan_symbol = isnothing(symbol) ? nothing : Symbol(symbol)
         kind_symbol = Symbol(kind)
         if !(kind_symbol in (:scale, :value))
             error("GridScan.kind must be either :scale or :value. Got :$kind_symbol.")
@@ -58,7 +58,7 @@ struct GridScan <: ScanSpec
 
         return new(
             simulation,
-            scale_symbol,
+            scan_symbol,
             grid_values,
             kind_symbol,
             lossf,

@@ -85,10 +85,9 @@ sim_spec = SimulationSpec(
 )
 
 
-# scale - rename to "compute all thompson samples" 
 scan = GridScan(
     simulation = sim_spec,
-    scale = :kx2,
+    symbol = :kx2,
     values = LinRange(0.01, 3, 100),
     lossf = loss,
 )
