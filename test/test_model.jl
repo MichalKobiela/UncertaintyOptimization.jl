@@ -218,9 +218,38 @@ end
     results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], scan, model)
 
     @test scan.values == [1.0, 2.0]
+    @test scan.kind == :scale
     @test length(results) == 1
+    @test results[1].kind == :scale
     @test length(results[1].losses) == 2
     @test loss_calls[] == 2
+
+    value_scan = UncertaintyOptimization.GridScan(
+        simulation = sim_spec,
+        scale = :k,
+        values = [2.0],
+        kind = :value,
+        lossf = loss,
+    )
+    value_results = UncertaintyOptimization.run_scan([Dict(:k => 2.0)], value_scan, model)
+
+    @test value_scan.kind == :value
+    @test value_results[1].kind == :value
+
+    scaled_params = [2.0]
+    value_params = [2.0]
+    UncertaintyOptimization._apply_grid_value!(scaled_params, model, :k, 2.0, :scale)
+    UncertaintyOptimization._apply_grid_value!(value_params, model, :k, 2.0, :value)
+
+    @test scaled_params == [4.0]
+    @test value_params == [2.0]
+    @test_throws ErrorException UncertaintyOptimization.GridScan(
+        simulation = sim_spec,
+        scale = :k,
+        values = [2.0],
+        kind = :replace,
+        lossf = loss,
+    )
 end
 
 @testset "Test Model simulations" begin
