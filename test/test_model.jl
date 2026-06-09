@@ -211,12 +211,13 @@ end
     scan = UncertaintyOptimization.GridScan(
         simulation = sim_spec,
         scale = :k,
-        linrange = [1.0, 2.0],
+        values = 1:2,
         lossf = loss,
     )
 
     results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], scan, model)
 
+    @test scan.values == [1.0, 2.0]
     @test length(results) == 1
     @test length(results[1].losses) == 2
     @test loss_calls[] == 2

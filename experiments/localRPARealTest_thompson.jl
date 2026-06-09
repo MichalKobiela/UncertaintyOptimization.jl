@@ -89,7 +89,7 @@ sim_spec = SimulationSpec(
 scan = GridScan(
     simulation = sim_spec,
     scale = :kx2,
-    linrange = LinRange(0.01, 3, 100),
+    values = LinRange(0.01, 3, 100),
     lossf = loss,
 )
 chain = run_scan(posterior, scan, model)

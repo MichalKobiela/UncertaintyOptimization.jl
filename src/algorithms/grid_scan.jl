@@ -3,7 +3,7 @@ using Tables
 """
     run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
 
-Run a one-dimensional grid scan for each sample in `samples` using `spec.linrange`.
+Run a one-dimensional grid scan for each sample in `samples` using `spec.values`.
 
 By default, each candidate is evaluated with `simulate!` using the settings from
 `spec.simulation`. The posterior sample is converted into the model's tunable parameter
@@ -31,8 +31,8 @@ into simulation outputs such as `(warmup_sol, predicted_sol)`.
 Returns a vector of named tuples with the best grid value and all losses for each sample.
 """
 function run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
-    if isempty(spec.linrange)
-        error("GridScan.linrange must not be empty")
+    if isempty(spec.values)
+        error("GridScan.values must not be empty")
     end
 
     if isnothing(model.prob)
@@ -43,9 +43,9 @@ function run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
     results = NamedTuple[]
 
     for (sample_index, one_posterior) in enumerate(posterior_samples)
-        losses = Vector{Float64}(undef, length(spec.linrange))
+        losses = Vector{Float64}(undef, length(spec.values))
 
-        for (grid_index, grid_value) in pairs(spec.linrange)
+        for (grid_index, grid_value) in pairs(spec.values)
             # use the simulate function to evaluate 
             # first, you have to scale the value
             # simulate!()
@@ -70,7 +70,7 @@ function run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
             sample_index = sample_index,
             sample = one_posterior,
             scale = spec.scale,
-            best_value = spec.linrange[best_index],
+            best_value = spec.values[best_index],
             best_loss = losses[best_index],
             losses = losses,
         ))
