@@ -11,20 +11,11 @@ using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
 using OrdinaryDiffEq
 using CSV, Tables
-using Turing
-using SciMLBase: VectorOfArray
 using SymbolicIndexingInterface
-using Random
 using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
-using Profile
-using StatsPlots
-# using SciMLSensitivity
-
-
-Random.seed!(0);
 
 
 RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
@@ -41,33 +32,16 @@ posterior = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r")
 end
 
 
-# thompson sampling, grid search loss function
-# for each posterior sample check what is the best kx2 scaling factor
-# now these will be reserved keywords, 
-# so warmup_sol and predicted_sol will contain the data necessary  
+# thompson sampling: loss function for the evaluation of the design parameters
 function loss(warmup_sol, predicted_sol; sys=nothing)
-    # define the loss function using the outputs from warmup and predicted
-
     isnothing(sys) && error("loss requires the model system as `sys` to locate state A.")
 
-    A = getproperty(sys, :A)
-    state_order = unknowns(sys)
-    A_idx = findfirst(isequal(A), state_order)
+    A_idx = findfirst(isequal(getproperty(sys, :A)), unknowns(sys))
     isnothing(A_idx) && error("State A was not found in the model unknown order.")
 
     background_fluorescence = 17.6
-    sol_end_state(sol, state_idx) = begin
-        values = Array(sol)
-        if ndims(values) == 1
-            state_idx == 1 || error("Solution only contains one saved state, but requested state index $state_idx.")
-            return values[end]
-        end
-
-        return values[state_idx, end]
-    end
-
-    adjusted_predicted = sol_end_state(predicted_sol, A_idx) + background_fluorescence
-    warmup = sol_end_state(warmup_sol, A_idx) + background_fluorescence
+    adjusted_predicted = Array(predicted_sol)[end] + background_fluorescence
+    warmup = warmup_sol[A_idx, end] + background_fluorescence
     
     target = 50
     (((warmup - target).^2) + (adjusted_predicted - target).^2) / 2
