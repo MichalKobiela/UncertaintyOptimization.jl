@@ -66,9 +66,10 @@ end
     cuma = UncertaintyOptimization.create_param("cuma")
     fallback = UncertaintyOptimization.create_param("fallback")
     baseline = UncertaintyOptimization.create_param("baseline")
+    sampled = UncertaintyOptimization.create_param("sampled"; tunable=true)
 
     eqs = [
-        Differential(t)(Y) ~ cuma * fallback * baseline * Y
+        Differential(t)(Y) ~ cuma * fallback * baseline * sampled * Y
     ]
 
     params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
@@ -102,6 +103,17 @@ end
             nothing,
             nothing,
             nothing,
+            nothing,
+            nothing,
+        ),
+        :sampled => UncertaintyOptimization.ParameterSpec(
+            "sampled",
+            sampled,
+            :uncertain,
+            5.0,
+            nothing,
+            nothing,
+            Dict("distribution" => "uniform", "lower" => 0.0, "upper" => 10.0),
             nothing,
             nothing,
         ),
@@ -142,6 +154,7 @@ end
     @test design_multiparam_maps[2][:fallback] == 20.0
     @test design_multiparam_maps[3][:fallback] == 30.0
     @test all(stage[:baseline] == 7.0 for stage in design_multiparam_maps)
+    @test all(!haskey(stage, :sampled) for stage in design_multiparam_maps)
 end
 
 @testset "Grid scan default evaluator" begin

@@ -89,6 +89,7 @@ scan = GridScan(
     simulation = sim_spec,
     symbol = :kx2,
     values = LinRange(0.01, 3, 100),
+    kind = :scale,
     lossf = loss,
 )
 chain = run_scan(posterior, scan, model)

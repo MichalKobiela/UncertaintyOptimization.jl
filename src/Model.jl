@@ -130,14 +130,15 @@ const MultiparamValue = Union{Float64, Tuple{Vararg{Float64}}}
 function extract_multiparams(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, MultiparamValue}
     multiparams = Dict{Symbol, MultiparamValue}()
     for kv in pairs(parameters)
-        value = if design && !isnothing(kv.second.design)
+        has_design_value = design && !isnothing(kv.second.design)
+        value = if has_design_value
             kv.second.design.value
         else
             kv.second.value
         end
 
         if design
-            if !isnothing(value)
+            if !isnothing(value) && (has_design_value || kv.second.role != :uncertain)
                 multiparams[kv.first] = value
             end
         elseif value isa Union{AbstractArray, Tuple}
