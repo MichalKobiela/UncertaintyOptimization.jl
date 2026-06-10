@@ -206,7 +206,15 @@ end
 
     sim_spec = UncertaintyOptimization.SimulationSpec(
         t_obs = [0.0, 0.5],
-        obs_state_idx = 1,
+        obs_state = :X,
+        initial_conditions = (1.0,),
+        tspan = (0.0, 0.5),
+        solver = Tsit5(),
+    )
+    @test sim_spec.obs_state == :X
+    @test_throws Exception UncertaintyOptimization.SimulationSpec(
+        t_obs = [0.0, 0.5],
+        obs_state = 1,
         initial_conditions = (1.0,),
         tspan = (0.0, 0.5),
         solver = Tsit5(),

@@ -215,7 +215,7 @@ function evaluate_model(model::Model, p_vec)
     sol = solve(prob_new, ctx.solver; 
                 dt=ctx.dt, 
                 saveat=ctx.t_obs, 
-                save_idxs=ctx.obs_state_idx)
+                save_idxs=observed_state_index(model.sys, ctx))
     
     return Array(sol)
 end
@@ -362,7 +362,7 @@ Prepares the model for simulation, created onced for many evaluations.
 
     setup_evaluation!(model::Model;
                       t_obs::Vector{Float64},
-                      obs_state_idx::Int,
+                      obs_state::Symbol,
                       initial_conditions::Vector{Float64},
                       tspan::Tuple{Float64, Float64},
                       solver=Euler(),

@@ -115,7 +115,7 @@ function _default_grid_scan_evaluator(one_posterior, grid_values, spec::Thompson
         simulation.tspan;
         solver=simulation.solver,
         saveat=simulation.t_obs,
-        save_idxs=simulation.obs_state_idx,
+        save_idxs=observed_state_index(model.sys, simulation),
         solver_opts=simulation.solver_opts,
         sampled_uncertain_params=sampled_uncertain_params,
         parameter_setter=scan_plan.setter!,

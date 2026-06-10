@@ -36,7 +36,7 @@ Uses all fields from InferenceSpec, plus:
 ```julia
 sim_spec = SimulationSpec(
     t_obs = times,
-    obs_state_idx = 1,
+    obs_state = :X,
     initial_conditions = (1.0, 1.0),
     tspan = (0.0, 100.0),
 )

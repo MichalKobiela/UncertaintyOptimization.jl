@@ -105,6 +105,7 @@ end
         saveat=simulation.t_obs, 
         # inference
         solver_opts = simulation.solver_opts,
+        save_idxs = observed_state_index(model.sys, simulation),
         sampled_uncertain_params = uncertain_sampled_values,
         prealloc_results_vector = prealloc_results_vector,
         )

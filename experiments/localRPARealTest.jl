@@ -50,11 +50,11 @@ rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 nuts = NUTS(0.5, init_ϵ = 0.003)
 sim_spec = SimulationSpec(
     t_obs = time,
-    obs_state_idx = 1,
+    obs_state = :A,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     solver = AutoTsit5(Rosenbrock23(autodiff=false)),
-    solver_opts = (dtmin = 1e-12,),
+    solver_opts = (dtmin = 1e-9,),
 )
 
 turing_spec = TuringSpec(
@@ -62,7 +62,7 @@ turing_spec = TuringSpec(
     data = data_selected,
     noise_prior = InverseGamma(2, 3), 
     noise_initial = 3.0, 
-    sampler = NUTS(0.5, init_ϵ = 0.003, metricT = DenseEuclideanMetric),
+    sampler = NUTS(0.5, init_ϵ = 0.006, metricT = DenseEuclideanMetric),
     n_samples = 3,
     n_chains = 1,
 )
@@ -71,6 +71,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a1.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a5.jls"), "w") do f
     serialize(f, chain)
 end

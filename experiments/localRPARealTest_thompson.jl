@@ -54,8 +54,7 @@ end
 
 sim_spec = SimulationSpec(
     t_obs = time,
-    # TODO ideally this would just take :A
-    obs_state_idx = findfirst(isequal(getproperty(sys, :A)), unknowns(sys)),
+    obs_state = :A,
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     solver = Rosenbrock23(),

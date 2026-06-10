@@ -77,7 +77,7 @@ data = convert(Array, randomized)
 # Run inference
 sim_spec = SimulationSpec(
     t_obs = t_obs,
-    obs_state_idx = 1,
+    obs_state = :A,
     initial_conditions = (1.0, 1.0),
     tspan = (0.0, 100.0),
     uncertain_param_values = params,
