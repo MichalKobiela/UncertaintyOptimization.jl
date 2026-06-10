@@ -270,6 +270,8 @@ function simulate!(model::Model,
                    solver_opts::NamedTuple = (;),
                    save_idxs::Any = nothing,
                    sampled_uncertain_params::Union{Nothing, AbstractVector} = nothing,
+                   parameter_setter::Any = nothing,
+                   parameter_values::Any = nothing,
                    multiparam_values:: Union{Nothing, Vector{Float64}} = nothing,
                    prealloc_results_vector::Union{Nothing, Vector{SciMLBase.ODESolution}} = nothing,
                    return_simulate::Bool = false,
@@ -307,6 +309,10 @@ function simulate!(model::Model,
         p_work = deepcopy(prob.p)
     end
 
+    if !isnothing(parameter_setter)
+        parameter_setter(p_work, parameter_values)
+    end
+
     warmup_sol = nothing
     if !isempty(warmup_values)
         # Reset warmup parameters on every simulation call. Some parameter containers
@@ -317,6 +323,10 @@ function simulate!(model::Model,
 
         warmup_sol = solve(prob, solver, p=p_work; solver_opts..., save_end=true, save_everystep=false, dense=false)
         p_work = replace(Initials(), p_work, warmup_sol.u[end])
+
+        if !isnothing(parameter_setter)
+            parameter_setter(p_work, parameter_values)
+        end
     end
 
     opts_prod = solver_opts
@@ -328,6 +338,10 @@ function simulate!(model::Model,
         # set all multiparameters
         if !isempty(stage_multiparam_values)
             stage_multiparam_setter!(p_work, stage_multiparam_values[i])
+        end
+
+        if !isnothing(parameter_setter)
+            parameter_setter(p_work, parameter_values)
         end
 
         sol = solve(prob, solver; p=p_work, opts_prod...)

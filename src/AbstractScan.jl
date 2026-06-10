@@ -5,63 +5,86 @@ Specification for grid-scan style inference/optimisation.
 
 Uses a shared `SimulationSpec` for simulation settings, plus:
 
-- `symbol`: parameter to scan, as a `Symbol` or `String`
-- `values`: scalers to scan over
-- `kind`: `:scale` multiplies `symbol` by each value, `:value` sets `symbol` to each value
-- `lossf`: user-provided loss function used to score a scan candidate
+- `scan`: parameter scan axes
+- `loss`: user-provided loss function used to score a scan candidate
 
 Example
 ```julia
 spec = GridScan(
     simulation = sim_spec,
-    symbol = "kx2",
-    values = LinRange(0.01, 3, 100),
-    kind = :scale,
-    lossf = loss,
+    scan = [
+        (symbol = "kx2", values = LinRange(0.01, 3, 100), kind = :scale),
+        (symbol = "kx3", values = LinRange(0.01, 3, 100), kind = :scale),
+    ],
+    loss = loss,
 )
 ```
 """
 
 
 # this a spec that defines how to apply a loss function to the posterior
-abstract type ScanSpec end
+abstract type ThompsonSpec end
 
 
 
-struct GridScan <: ScanSpec
-    # simulation
+struct ThompsonGridSpec <: ThompsonSpec
     simulation::SimulationSpec
+    scan::Vector{NamedTuple{(:symbol, :values, :kind), Tuple{Symbol, Vector{Float64}, Symbol}}}
+    combinations::Vector{Vector{Float64}}
+    loss::Any
 
-    # actual grid scan params
-    symbol::Union{Nothing, Symbol}
-    values::Vector{Float64}
-    kind::Symbol
-    lossf::Any
-
-    function GridScan(;
+    function ThompsonGridSpec(;
         simulation::SimulationSpec,
-        symbol::Union{Nothing, Symbol, AbstractString} = nothing,
-        values = Float64[],
-        kind::Union{Symbol, AbstractString} = :scale,
-        lossf,
+        scan,
+        loss,
     )
-        grid_values = Float64.(collect(values))
-        if !isempty(grid_values) && !all(isfinite, grid_values)
-            error("GridScan.values must contain finite values")
+        normalized_scan = collect(map(scan) do axis
+            symbol = Symbol(axis.symbol)
+            values = Float64.(collect(axis.values))
+            kind = Symbol(axis.kind)
+
+            if isempty(values)
+                error("GridScan.scan values for $symbol must not be empty")
+            end
+
+            if !all(isfinite, values)
+                error("GridScan.scan values for $symbol must contain finite values")
+            end
+
+            if !(kind in (:scale, :value))
+                error("GridScan.scan kind for $symbol must be either :scale or :value. Got :$kind.")
+            end
+
+            return (symbol = symbol, values = values, kind = kind)
+        end)
+
+        if isempty(normalized_scan)
+            error("GridScan.scan must not be empty")
         end
 
-        scan_symbol = isnothing(symbol) ? nothing : Symbol(symbol)
-        kind_symbol = Symbol(kind)
-        if !(kind_symbol in (:scale, :value))
-            error("GridScan.kind must be either :scale or :value. Got :$kind_symbol.")
-        end
-
-        return new(
-            simulation,
-            scan_symbol,
-            grid_values,
-            kind_symbol,
-            lossf,
-        )
+        return new(simulation, normalized_scan, _scan_combinations(normalized_scan), loss)
     end
+end
+
+const GridScan = ThompsonGridSpec
+
+function _scan_combinations(scan)
+    combinations = [Float64[]]
+
+    for axis in scan
+        next_combinations = Vector{Vector{Float64}}(undef, length(combinations) * length(axis.values))
+        index = 1
+
+        for combination in combinations, value in axis.values
+            next = Vector{Float64}(undef, length(combination) + 1)
+            copyto!(next, combination)
+            next[end] = value
+            next_combinations[index] = next
+            index += 1
+        end
+
+        combinations = next_combinations
+    end
+
+    return combinations
 end

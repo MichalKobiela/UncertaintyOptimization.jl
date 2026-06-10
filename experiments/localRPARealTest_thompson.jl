@@ -1,6 +1,6 @@
 #=
-For each posterior sample, the script performs a 1D grid 
-search over a scaling factor for one parameter, 
+For one posterior sample, the script performs a grid 
+search over scaling factors for design parameters,
 runs a warmup simulation, then evaluates how close 
 the warmup state and final post-warmup 
 prediction are to a target value.
@@ -16,6 +16,7 @@ using Serialization
 using CSV, Tables
 using Plots
 using DataFrames
+using Random
 
 
 RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
@@ -28,7 +29,10 @@ time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
 posterior = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") do io
         # extract and convert into a DataFrame
         posterior_sample = deserialize(io)[1000:2000]
-        DataFrame(posterior_sample)
+        posterior_df = DataFrame(posterior_sample)
+        rng = MersenneTwister(4)
+        draw_index = rand(rng, 1:nrow(posterior_df))
+        posterior_df[draw_index:draw_index, :]
 end
 
 
@@ -50,8 +54,8 @@ end
 
 sim_spec = SimulationSpec(
     t_obs = time,
-    # TODO - ideally this would not be operating on idx, but on names
-    obs_state_idx = 1,
+    # TODO ideally this would just take :A
+    obs_state_idx = findfirst(isequal(getproperty(sys, :A)), unknowns(sys)),
     initial_conditions = (24.0, 350.0),
     tspan = (0.0, 10.0),
     solver = Rosenbrock23(),
@@ -59,11 +63,14 @@ sim_spec = SimulationSpec(
 )
 
 
+
 scan = GridScan(
     simulation = sim_spec,
-    symbol = :kx2,
-    values = LinRange(0.01, 3, 100),
-    kind = :scale,
-    lossf = loss,
+    scan = [
+        (symbol = :kx2, values = LinRange(0.01, 3, 100), kind = :scale),
+        (symbol = :kx3, values = LinRange(0.01, 3, 100), kind = :scale),
+    ],
+    loss = loss,
 )
-chain = run_scan(posterior, scan, model)
+
+thompson_samples = run_scan(posterior, scan, model)

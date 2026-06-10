@@ -182,7 +182,7 @@ end
             "d",
             d,
             :fixed,
-            0.0,
+            3.0,
             nothing,
             nothing,
             nothing,
@@ -223,33 +223,32 @@ end
 
     scan = UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        symbol = :k,
-        values = 1:2,
-        lossf = loss,
+        scan = [(symbol = :k, values = 1:2, kind = :scale)],
+        loss = loss,
     )
 
     results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], scan, model)
 
-    @test scan.values == [1.0, 2.0]
-    @test scan.symbol == :k
-    @test scan.kind == :scale
+    @test scan.scan[1].values == [1.0, 2.0]
+    @test scan.scan[1].symbol == :k
+    @test scan.scan[1].kind == :scale
     @test length(results) == 1
-    @test results[1].symbol == :k
-    @test results[1].kind == :scale
+    @test results[1].scan == scan.scan
+    @test length(results[1].best_values) == 1
+    @test results[1].best_values[1].symbol == :k
+    @test results[1].best_values[1].kind == :scale
     @test length(results[1].losses) == 2
     @test loss_calls[] == 2
 
     value_scan = UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        symbol = :k,
-        values = [2.0],
-        kind = :value,
-        lossf = loss,
+        scan = [(symbol = :k, values = [2.0], kind = :value)],
+        loss = loss,
     )
     value_results = UncertaintyOptimization.run_scan([Dict(:k => 2.0)], value_scan, model)
 
-    @test value_scan.kind == :value
-    @test value_results[1].kind == :value
+    @test value_scan.scan[1].kind == :value
+    @test value_results[1].best_values[1].kind == :value
 
     scaled_params = [2.0]
     value_params = [2.0]
@@ -260,11 +259,40 @@ end
     @test value_params == [2.0]
     @test_throws ErrorException UncertaintyOptimization.GridScan(
         simulation = sim_spec,
-        symbol = :k,
-        values = [2.0],
-        kind = :replace,
-        lossf = loss,
+        scan = [(symbol = :k, values = [2.0], kind = :replace)],
+        loss = loss,
     )
+
+    combo_scan = UncertaintyOptimization.GridScan(
+        simulation = sim_spec,
+        scan = [
+            (symbol = :k, values = [1.0, 2.0], kind = :scale),
+            (symbol = :k, values = [3.0, 4.0], kind = :scale),
+        ],
+        loss = (values; sys=nothing) -> sum(values),
+    )
+
+    combo_results = UncertaintyOptimization.run_scan(
+        [Dict(:k => 1.0)],
+        combo_scan,
+        model;
+        evaluator = (_, values, __) -> values,
+    )
+
+    @test combo_scan.combinations == [[1.0, 3.0], [1.0, 4.0], [2.0, 3.0], [2.0, 4.0]]
+    @test length(combo_results[1].losses) == 4
+    @test combo_results[1].best_values[1].value == 1.0
+    @test combo_results[1].best_values[2].value == 3.0
+
+    fixed_scan = UncertaintyOptimization.GridScan(
+        simulation = sim_spec,
+        scan = [(symbol = :d, values = [2.0], kind = :scale)],
+        loss = (warmup_sol, predicted_sol; sys=nothing) -> Array(predicted_sol)[end],
+    )
+
+    fixed_results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], fixed_scan, model)
+
+    @test only(fixed_results[1].losses) > 5.0
 end
 
 @testset "Test Model simulations" begin
