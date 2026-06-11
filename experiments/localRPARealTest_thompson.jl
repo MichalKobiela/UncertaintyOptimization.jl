@@ -94,7 +94,7 @@ eval_scan = CartesianSampler(
 eval_results = run_scan(posterior, eval_scan, model)
 
 evaluation = DataFrame(
-    kx2 = candidate_kx2,
+    kx2 = Float64[],
     median_loss = Float64[],
     q75_loss = Float64[],
     std_loss = Float64[],
@@ -112,6 +112,7 @@ for (i, kx2) in enumerate(candidate_kx2)
 end
 
 CSV.write("evaluation.csv", evaluation)
+
 
 med_res = evaluation.median_loss
 quant_res = evaluation.q75_loss
