@@ -30,9 +30,9 @@ posterior = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r")
         # extract and convert into a DataFrame
         posterior_sample = deserialize(io)[1000:2000]
         posterior_df = DataFrame(posterior_sample)
-        rng = MersenneTwister(4)
-        draw_index = rand(rng, 1:nrow(posterior_df))
-        posterior_df[draw_index:draw_index, :]
+        # rng = MersenneTwister(4)
+        # draw_index = rand(rng, 1:nrow(posterior_df))
+        # posterior_df[draw_index:draw_index, :]
 end
 
 
@@ -67,9 +67,19 @@ scan = ThompsonGridSamples(
     simulation = sim_spec,
     scan = [
         (symbol = :kx2, values = LinRange(0.01, 3, 100), kind = :scale),
-        (symbol = :kx3, values = LinRange(0.01, 3, 100), kind = :scale),
     ],
     loss = loss,
 )
 
 thompson_samples = run_scan(posterior, scan, model)
+
+summary_best = DataFrame(
+    posterior_index = [r.sample_index for r in thompson_samples],
+    kx2 = [r.sample.kx2 for r in thompson_samples],
+    kx2_loss = [r.best_loss for r in thompson_samples],
+    kx2_scaler = [only(r.best_values).value for r in thompson_samples],
+)
+
+CSV.write("thompson_samples.csv", summary_best)
+
+
