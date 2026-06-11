@@ -47,7 +47,7 @@ data_selected = vcat(data[:,2], data[:,5], data[:,9])
 
 rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
-nuts = NUTS(0.5, init_ϵ = 0.003)
+nuts = NUTS(0.5, init_ϵ = 0.003, max_depth=9)
 sim_spec = SimulationSpec(
     t_obs = time,
     obs_state = :A,

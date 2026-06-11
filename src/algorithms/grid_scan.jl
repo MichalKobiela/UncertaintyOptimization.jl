@@ -1,7 +1,7 @@
 using Tables
 
 """
-    run_scan(samples, spec::GridScan, model::Model; evaluator = nothing)
+    run_scan(samples, spec::ThompsonGridSamples, model::Model; evaluator = nothing)
 
 Run a grid scan for each sample in `samples` using the Cartesian product of `spec.scan`.
 
@@ -52,7 +52,7 @@ function run_scan(samples, spec::ThompsonGridSpec, model::Model; evaluator = not
             loss_value = _call_loss(spec.loss, evaluated, model.sys)
 
             if !(loss_value isa Real)
-                error("GridScan.loss must return a real scalar. Got $(typeof(loss_value)).")
+                error("ThompsonGridSamples.loss must return a real scalar. Got $(typeof(loss_value)).")
             end
 
             losses[grid_index] = Float64(loss_value)
@@ -180,12 +180,12 @@ end
 
 function _scan_base_parameter_value(model::Model, symbol::Symbol)
     if !haskey(model.model_def.parameters, symbol)
-        error("GridScan.scan symbol $symbol is not one of the model parameters.")
+        error("ThompsonGridSamples.scan symbol $symbol is not one of the model parameters.")
     end
 
     value = model.model_def.parameters[symbol].value
     if value isa AbstractArray || value isa Tuple || isnothing(value)
-        error("GridScan.scan symbol $symbol must have a scalar base value when it is not tunable.")
+        error("ThompsonGridSamples.scan symbol $symbol must have a scalar base value when it is not tunable.")
     end
 
     return Float64(value)
@@ -207,7 +207,7 @@ end
 function _apply_grid_value!(sampled_uncertain_params, model::Model, symbol::Symbol, grid_value, kind::Symbol)
     symbol_index = findfirst(==(symbol), model.tunable_symbols)
     if isnothing(symbol_index)
-        error("GridScan.scan symbol $symbol is not one of the model tunable parameters: $(model.tunable_symbols).")
+        error("ThompsonGridSamples.scan symbol $symbol is not one of the model tunable parameters: $(model.tunable_symbols).")
     end
 
     return _apply_grid_value_at_index!(sampled_uncertain_params, symbol_index, grid_value, kind)
@@ -224,7 +224,7 @@ function _grid_parameter_value(base_value, grid_value, kind::Symbol)
     elseif kind === :value
         return Float64(grid_value)
     else
-        error("GridScan.kind must be either :scale or :value. Got :$kind.")
+        error("ThompsonGridSamples.kind must be either :scale or :value. Got :$kind.")
     end
 end
 

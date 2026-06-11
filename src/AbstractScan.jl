@@ -1,5 +1,5 @@
 """
-    GridScan
+    ThompsonGridSamples
 
 Specification for grid-scan style inference/optimisation.
 
@@ -10,7 +10,7 @@ Uses a shared `SimulationSpec` for simulation settings, plus:
 
 Example
 ```julia
-spec = GridScan(
+spec = ThompsonGridSamples(
     simulation = sim_spec,
     scan = [
         (symbol = "kx2", values = LinRange(0.01, 3, 100), kind = :scale),
@@ -44,29 +44,29 @@ struct ThompsonGridSpec <: ThompsonSpec
             kind = Symbol(axis.kind)
 
             if isempty(values)
-                error("GridScan.scan values for $symbol must not be empty")
+                error("ThompsonGridSamples.scan values for $symbol must not be empty")
             end
 
             if !all(isfinite, values)
-                error("GridScan.scan values for $symbol must contain finite values")
+                error("ThompsonGridSamples.scan values for $symbol must contain finite values")
             end
 
             if !(kind in (:scale, :value))
-                error("GridScan.scan kind for $symbol must be either :scale or :value. Got :$kind.")
+                error("ThompsonGridSamples.scan kind for $symbol must be either :scale or :value. Got :$kind.")
             end
 
             return (symbol = symbol, values = values, kind = kind)
         end)
 
         if isempty(normalized_scan)
-            error("GridScan.scan must not be empty")
+            error("ThompsonGridSamples.scan must not be empty")
         end
 
         return new(simulation, normalized_scan, _scan_combinations(normalized_scan), loss)
     end
 end
 
-const GridScan = ThompsonGridSpec
+const ThompsonGridSamples = ThompsonGridSpec
 
 function _scan_combinations(scan)
     combinations = [Float64[]]

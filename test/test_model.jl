@@ -192,7 +192,7 @@ end
     )
 
     model_def = UncertaintyOptimization.ModelDefinition(
-        "GridScanDefaultEvaluator",
+        "ThompsonGridSamplesDefaultEvaluator",
         "Tiny model for grid scan default evaluator",
         :ODE,
         eqs,
@@ -229,7 +229,7 @@ end
         return sum(Array(predicted_sol))
     end
 
-    scan = UncertaintyOptimization.GridScan(
+    scan = UncertaintyOptimization.ThompsonGridSamples(
         simulation = sim_spec,
         scan = [(symbol = :k, values = 1:2, kind = :scale)],
         loss = loss,
@@ -248,7 +248,7 @@ end
     @test length(results[1].losses) == 2
     @test loss_calls[] == 2
 
-    value_scan = UncertaintyOptimization.GridScan(
+    value_scan = UncertaintyOptimization.ThompsonGridSamples(
         simulation = sim_spec,
         scan = [(symbol = :k, values = [2.0], kind = :value)],
         loss = loss,
@@ -265,13 +265,13 @@ end
 
     @test scaled_params == [4.0]
     @test value_params == [2.0]
-    @test_throws ErrorException UncertaintyOptimization.GridScan(
+    @test_throws ErrorException UncertaintyOptimization.ThompsonGridSamples(
         simulation = sim_spec,
         scan = [(symbol = :k, values = [2.0], kind = :replace)],
         loss = loss,
     )
 
-    combo_scan = UncertaintyOptimization.GridScan(
+    combo_scan = UncertaintyOptimization.ThompsonGridSamples(
         simulation = sim_spec,
         scan = [
             (symbol = :k, values = [1.0, 2.0], kind = :scale),
@@ -292,7 +292,7 @@ end
     @test combo_results[1].best_values[1].value == 1.0
     @test combo_results[1].best_values[2].value == 3.0
 
-    fixed_scan = UncertaintyOptimization.GridScan(
+    fixed_scan = UncertaintyOptimization.ThompsonGridSamples(
         simulation = sim_spec,
         scan = [(symbol = :d, values = [2.0], kind = :scale)],
         loss = (warmup_sol, predicted_sol; sys=nothing) -> Array(predicted_sol)[end],

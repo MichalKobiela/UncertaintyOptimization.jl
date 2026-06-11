@@ -63,7 +63,7 @@ sim_spec = SimulationSpec(
 
 
 
-scan = GridScan(
+scan = ThompsonGridSamples(
     simulation = sim_spec,
     scan = [
         (symbol = :kx2, values = LinRange(0.01, 3, 100), kind = :scale),
