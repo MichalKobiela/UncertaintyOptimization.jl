@@ -12,6 +12,6 @@ include("algorithms/grid_scan.jl")
 export load_model, ModelDefinition
 export simulate!, Model, setup_simulation!
 export InferenceProblem, set_data!
-export SimulationSpec, TuringSpec, ThompsonGridSpec, ThompsonGridSamples, run_inference, run_scan
+export SimulationSpec, TuringSpec, ThompsonGridSpec, CartesianSampler, run_inference, run_scan
 
 end

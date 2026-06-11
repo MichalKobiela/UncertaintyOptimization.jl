@@ -24,6 +24,14 @@ RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
 model = Model(RPA_model, sys)
 
 time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
+sim_spec = SimulationSpec(
+    t_obs = time,
+    obs_state = :A,
+    initial_conditions = (24.0, 350.0),
+    tspan = (0.0, 10.0),
+    solver = Rosenbrock23(),
+    solver_opts = (dtmin = 1e-9,),
+)
 
 # load the precomputed posterior from a single chain for now
 posterior = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") do io
@@ -34,7 +42,6 @@ posterior = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r")
         # draw_index = rand(rng, 1:nrow(posterior_df))
         # posterior_df[draw_index:draw_index, :]
 end
-
 
 # thompson sampling: loss function for the evaluation of the design parameters
 function loss(warmup_sol, predicted_sol; sys=nothing)
@@ -51,19 +58,7 @@ function loss(warmup_sol, predicted_sol; sys=nothing)
     (((warmup - target).^2) + (adjusted_predicted - target).^2) / 2
 end
 
-
-sim_spec = SimulationSpec(
-    t_obs = time,
-    obs_state = :A,
-    initial_conditions = (24.0, 350.0),
-    tspan = (0.0, 10.0),
-    solver = Rosenbrock23(),
-    solver_opts = (dtmin = 1e-12,),
-)
-
-
-
-scan = ThompsonGridSamples(
+scan = CartesianSampler(
     simulation = sim_spec,
     scan = [
         (symbol = :kx2, values = LinRange(0.01, 3, 100), kind = :scale),
@@ -81,5 +76,4 @@ summary_best = DataFrame(
 )
 
 CSV.write("thompson_samples.csv", summary_best)
-
 
