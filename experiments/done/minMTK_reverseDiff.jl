@@ -207,7 +207,6 @@ B_idx = findfirst(isequal(B), state_order)
 
     # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
     right_types = T.(tunable_ps)
-    # @show right_types
     p_work = replace(Tunable(), prob.p, right_types)
     # TODO - consider adding cuma as tunable, this 
     # means we won't be able to leak it here, 
@@ -253,7 +252,6 @@ B_idx = findfirst(isequal(B), state_order)
         # faster?
         fast_prob = remake(prob, tspan=(0.0, 5.45))
         
-        # @show p_work
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(fast_prob, Rosenbrock23(), p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
@@ -311,4 +309,3 @@ f = open(string(@__DIR__)*"/minmtk_c30-reverseDiffAdBackend_jac0.jls", "w")
 
 serialize(f, chain_named)
 close(f)
-

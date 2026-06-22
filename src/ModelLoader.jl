@@ -62,7 +62,7 @@ function load_YAML(filename:: String)
     if isfile(filename)
         return YAML.load_file(filename)
     else
-        println("❌  File with the name $filename not found, please check if the input path is correct and the file exists")
+        @warn "File not found; check that the input path is correct and the file exists" filename
         return nothing
     end
 end
@@ -106,7 +106,7 @@ function validate_YAML(config::Dict)
     required_tags = ["experiment", "model", "parameters", "equations"]
     for tag in required_tags
         if !haskey(config, tag)
-            println(tag)
+            @error "Missing required section in YAML" tag
             error(:"❌ Missing required section in YAML: '$tag'")
         end
     end
@@ -124,7 +124,7 @@ function validate_YAML(config::Dict)
         end
     end
     
-    println("✅ Valid YAML")
+    @info "Valid YAML"
     return true
 
 end

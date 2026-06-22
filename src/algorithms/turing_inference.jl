@@ -8,7 +8,7 @@ using SciMLBase: successful_retcode
 
 function run_inference(model::Model, spec::TuringSpec)
 
-    println("Running Turing Inference...")
+    @info "Running Turing inference"
 
     # 1. Set up the model
     setup_model_for_inference(model, spec)
@@ -126,22 +126,21 @@ end
 
         # 2. predicted/data are vectors of same length
     if !(predicted isa AbstractVector)
-        println("predicted is not abstract")
+        @debug "Predicted observations are not an AbstractVector" predicted_type=typeof(predicted)
         #Turing.@addlogprob! -Inf
         Turing.@addlogprob! -1e10
         return
     end
 
     if length(predicted) != length(observed_data)
-        println("different lengths")
-        @show size(predicted) size(observed_data) length(predicted) length(observed_data)
+        @debug "Predicted observations and data have different lengths" predicted_size=size(predicted) data_size=size(observed_data) predicted_length=length(predicted) data_length=length(observed_data)
         Turing.@addlogprob! -1e10
         return
     end
 
     # finite values only
     if !all(isfinite, predicted) || !isfinite(σ) || σ <= 0
-        println("not finite")
+        @debug "Predicted observations or noise scale are invalid" all_predicted_finite=all(isfinite, predicted) sigma=σ
         Turing.@addlogprob! -1e10
         return
     end    

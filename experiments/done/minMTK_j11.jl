@@ -236,7 +236,6 @@ B_idx = findfirst(isequal(B), state_order)
         padded = [p_work[2][1], warm.u[end]..., p_work[2][4]]
         p_work = replace(Initials(), p_work, padded)
         
-        # @show p_work
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
@@ -315,4 +314,3 @@ chain_mcmc = MCMCChains.setinfo(chain_mcmc, (;))
 f = open(string(@__DIR__)*"/minmtk_c61_j11.9_padded.jls", "w")
 serialize(f, chain_mcmc)
 close(f)
-

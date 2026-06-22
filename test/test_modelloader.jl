@@ -1,19 +1,16 @@
 using Test
 using YAML
 using ModelingToolkit
-using IOCapture
 
 
 
 @testset "YAML Loading" begin
     # Test for missing file and an error being gracefully handled
     missing_file = "i-dont-exists-file.yml"
-    output = IOCapture.capture() do 
+    @test_logs (:warn, r"File not found") begin
         config = UncertaintyOptimization.load_YAML(missing_file)
         @test config == nothing
     end
-    println(output)
-    @test occursin("❌  File with the name $missing_file not found, please check if the input path is correct and the file exists",output.output)
     
     # Test that it loads an a real file returning a Dict
     filename = joinpath(@__DIR__, "test-data", "test_RPA.yml")

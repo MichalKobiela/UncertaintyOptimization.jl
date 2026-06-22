@@ -212,7 +212,6 @@ B_idx = findfirst(isequal(B), state_order)
 
     # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
     right_types = T.(tunable_ps)
-    # @show right_types
     p_work = replace(Tunable(), prob.p, right_types)
     # TODO - consider adding cuma as tunable, this 
     # means we won't be able to leak it here, 
@@ -255,7 +254,6 @@ B_idx = findfirst(isequal(B), state_order)
         p_work = P(pvec, u0_work, f3, f4, f5, f6)
         u0_setter!(p_work[2], warm_u0)
         
-        # @show p_work
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
         # display(Plots.plot(sol1))
@@ -318,4 +316,3 @@ chain_named = replacenames(chain_1, rename_map)
 f = open(string(@__DIR__)*"/minmtk_c55_nuts0.5_e0.003_DEM_tsitRB23_j12.1_nuts1000.jls", "w")
 serialize(f, chain_named)
 close(f)
-

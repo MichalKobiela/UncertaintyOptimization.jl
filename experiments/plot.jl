@@ -65,7 +65,3 @@ savefig(string(@__DIR__)*"/posterior.pdf")
 
 # using Statistics
 # chain_df = DataFrame(chain_1)
-# @show mean(chain_df.tree_depth .== 10)
-# @show mean(chain_df.n_steps .== 1023)
-# @show median(chain_df.n_steps)
-# @show maximum(chain_df.n_steps)

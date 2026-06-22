@@ -171,7 +171,7 @@ B_idx = findfirst(isequal(B), state_order)
 
     draws ~ distributions
 
-    @show draws
+    @debug "Draws" draws
 
     if !isnothing(force_values)
         draws = force_values
@@ -182,7 +182,6 @@ B_idx = findfirst(isequal(B), state_order)
 
     # TODO - do a test if p_work initially always reflects on prob.p, or if cuma can leak
     right_types = T.(tunable_ps)
-    # @show right_types
     p_work = replace(Tunable(), prob.p, right_types)
     # TODO - consider adding cuma as tunable, this 
     # means we won't be able to leak it here, 
@@ -225,7 +224,6 @@ B_idx = findfirst(isequal(B), state_order)
         p_work = P(pvec, u0_work, f3, f4, f5, f6)
         u0_setter!(p_work[2], warm_u0)
         
-        # @show p_work
         cuma_setter!(p_work, (2e-5, ))
         sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat, sensealg=SENSEALG)
         # display(Plots.plot(sol1))
@@ -240,7 +238,7 @@ B_idx = findfirst(isequal(B), state_order)
         # fixme - use 
         data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
     catch e
-        @show e
+        @debug "Fit solve failed" exception=e
         Turing.@addlogprob! -1e10
     end
 
@@ -281,4 +279,3 @@ chain_named = replacenames(chain_1, rename_map)
 f = open(string(@__DIR__)*"/minmtk_forwardSensitivity_matching_minMTK_noadback_tests.jls", "w")
 serialize(f, chain_named)
 close(f)
-

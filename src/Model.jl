@@ -2,9 +2,6 @@ using ModelingToolkit
 using OrdinaryDiffEq
 using SymbolicIndexingInterface
 using SciMLStructures: Tunable, replace, Initials
-using PreallocationTools
-using Plots
-using ForwardDiff
 
 """
 Model
@@ -265,7 +262,7 @@ function simulate!(model::Model,
                    ;
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver = Rosenbrock23(),
-                   saveat::Any = Float64[], # TODO - change to vector 
+                   saveat::Vector{Float64} = Float64[],
                    # solve kwargs
                    solver_opts::NamedTuple = (;),
                    save_idxs::Any = nothing,
@@ -280,7 +277,7 @@ function simulate!(model::Model,
 
     # build the problem once
     if isnothing(model.prob)
-        println("set up simulation")
+        @debug "Setting up simulation"
         setup_simulation!(model, 
                         initial_conditions, 
                         tspan;
