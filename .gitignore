@@ -6,3 +6,4 @@
 *.pdf
 *.jlprof
 profiling
+.DS_Store
