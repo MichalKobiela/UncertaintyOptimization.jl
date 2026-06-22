@@ -83,7 +83,7 @@ CSV.write("thompson_samples.csv", summary_best)
 
 
 ## evaluate now the kx2 values for each posterior
-candidate_kx2 = sort(unique(summary_best.best_kx2))
+candidate_kx2 = sort(unique(summary_best.kx2_scaler))
 
 eval_scan = CartesianSampler(
     simulation = sim_spec,
