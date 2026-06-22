@@ -29,6 +29,8 @@ function run_inference(model::Model, spec::TuringSpec)
 
     # preallocate for the hot loop the results vector
     results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
+    _validate_observation_layout(spec.data, spec.simulation, results_num)
+
     prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
 
     # 2. Build turing model
@@ -105,7 +107,7 @@ end
         saveat=simulation.t_obs, 
         # inference
         solver_opts = simulation.solver_opts,
-        save_idxs = observed_state_index(model.sys, simulation),
+        save_idxs = observed_state_save_idxs(model.sys, simulation),
         sampled_uncertain_params = uncertain_sampled_values,
         prealloc_results_vector = prealloc_results_vector,
         )
@@ -116,9 +118,8 @@ end
         return
     end
 
-    # TODO - generalise choosing how to extract the states
-    # predicted = vec(vcat(sol[1,:] for sol in sols))
-    predicted = vcat(sols[1][1,:], sols[2][1,:], sols[3][1,:])
+    predicted = _predicted_observations(sols, simulation)
+    observed_data = vec(data)
 
     # empty the results for the next run
     # empty!(sols)
@@ -131,9 +132,9 @@ end
         return
     end
 
-    if length(predicted) != length(data)
+    if length(predicted) != length(observed_data)
         println("different lengths")
-        @show size(predicted) size(data) length(predicted) length(data)
+        @show size(predicted) size(observed_data) length(predicted) length(observed_data)
         Turing.@addlogprob! -1e10
         return
     end
@@ -145,6 +146,38 @@ end
         return
     end    
 
-    data ~ MvNormal(predicted, σ^2 * I)
+    observed_data ~ MvNormal(predicted, σ^2 * I)
+end
+
+function _predicted_observations(sols, simulation::SimulationSpec)
+    if isempty(sols)
+        return Float64[]
+    end
+
+    saved_state_positions = 1:observed_state_count(simulation)
+    return reduce(vcat, (vec(sol[state_position, :]) for sol in sols for state_position in saved_state_positions))
+end
+
+function _validate_observation_layout(data, simulation::SimulationSpec, n_solutions::Integer)
+    block_length = length(simulation.t_obs) * observed_state_count(simulation)
+
+    if length(data) % block_length != 0
+        error(
+            "Inference data length $(length(data)) does not match SimulationSpec: " *
+            "expected a multiple of $block_length " *
+            "($(length(simulation.t_obs)) time points * $(observed_state_count(simulation)) observed state(s))."
+        )
+    end
+
+    data_solution_count = div(length(data), block_length)
+    if data_solution_count != n_solutions
+        error(
+            "Inference data contains $data_solution_count solution block(s), " *
+            "but the simulation will produce $n_solutions. Check SimulationSpec.obs_state " *
+            "and model multiparameter values."
+        )
+    end
+
+    return nothing
 end
     

@@ -157,6 +157,70 @@ end
     @test all(!haskey(stage, :sampled) for stage in design_multiparam_maps)
 end
 
+@testset "Observed state extraction" begin
+    @variables A(t) B(t)
+    k = UncertaintyOptimization.create_param("k")
+
+    eqs = [
+        Differential(t)(A) ~ k * A,
+        Differential(t)(B) ~ 2 * k * B,
+    ]
+
+    params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
+        :k => UncertaintyOptimization.ParameterSpec(
+            "k",
+            k,
+            :fixed,
+            1.0,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+        ),
+    )
+
+    model_def = UncertaintyOptimization.ModelDefinition(
+        "ObservedStateExtraction",
+        "Tiny model for observed-state index resolution",
+        :ODE,
+        eqs,
+        Dict(:A => A, :B => B),
+        params,
+        nothing,
+    )
+
+    @mtkcompile observed_state_sys = System(model_def.equations, t)
+
+    sim_spec = UncertaintyOptimization.SimulationSpec(
+        t_obs = [0.0, 1.0],
+        obs_state = [:B, :A],
+        initial_conditions = (1.0, 1.0),
+        tspan = (0.0, 1.0),
+    )
+
+    expected_indices = [
+        findfirst(isequal(getproperty(observed_state_sys, state)), unknowns(observed_state_sys))
+        for state in (:B, :A)
+    ]
+
+    @test UncertaintyOptimization.observed_states(sim_spec) == (:B, :A)
+    @test UncertaintyOptimization.observed_state_indices(observed_state_sys, sim_spec) == expected_indices
+    @test UncertaintyOptimization.observed_state_save_idxs(observed_state_sys, sim_spec) == expected_indices
+
+    sols = [
+        [20.0 21.0; 10.0 11.0],
+        [40.0 41.0; 30.0 31.0],
+    ]
+
+    predicted = UncertaintyOptimization._predicted_observations(sols, sim_spec)
+    @test predicted == [20.0, 21.0, 10.0, 11.0, 40.0, 41.0, 30.0, 31.0]
+
+    UncertaintyOptimization._validate_observation_layout(predicted, sim_spec, length(sols))
+    @test_throws ErrorException UncertaintyOptimization._validate_observation_layout(predicted[1:end-1], sim_spec, length(sols))
+    @test_throws ErrorException UncertaintyOptimization._validate_observation_layout(predicted, sim_spec, length(sols) + 1)
+end
+
 @testset "Grid scan default evaluator" begin
     @variables X(t)
     k = UncertaintyOptimization.create_param("k"; tunable=true)
