@@ -16,12 +16,22 @@ The aim of this module is to be responsible for reading in a YAML and creating t
 # Struct Definitions
 # -------------------------------------------------------------------------
 
+"""
+    Design
+
+Design-stage warmup and production values for a parameter.
+"""
 struct Design
     warmup_value:: Union{Nothing, Float64} 
     value:: Union{Nothing, Float64, Tuple{Vararg{Float64}}}   
 end
 
 # Currently immutable but we can make them mutable if required later
+"""
+    ParameterSpec
+
+Parameter metadata parsed from YAML.
+"""
 struct ParameterSpec
     name::String # paramater name
     # TODO - why is symbol Any? 
@@ -35,7 +45,11 @@ struct ParameterSpec
     design_optimise:: Union{Nothing, Tuple{Vararg{Float64}}}
 end
 
+"""
+    ModelDefinition
 
+Symbolic model, states, parameters, and input expression parsed from YAML.
+"""
 struct ModelDefinition
     model_name::String
     model_description::String
@@ -129,6 +143,11 @@ function validate_YAML(config::Dict)
 
 end
 
+"""
+    parse_values(x)
+
+Convert YAML vectors to tuples and leave scalar values unchanged.
+"""
 function parse_values(x)
     if isnothing(x)
         return x
@@ -139,6 +158,11 @@ function parse_values(x)
     end
 end
 
+"""
+    parse_design_optimise_values(x) -> Tuple
+
+Parse design scan values from a vector or `start:step:stop` string.
+"""
 function parse_design_optimise_values(x)::Tuple{Vararg{Float64}}
     values = if x isa AbstractVector
         Float64.(x)
@@ -169,6 +193,11 @@ end
 # Model Symbolic Construction
 # -------------------------------------------------------------------------
 
+"""
+    build_symbolics(config)
+
+Build ModelingToolkit variables, parameters, and input expression from YAML data.
+"""
 function build_symbolics(config::Dict) 
 
   #  # Symbolic states
@@ -224,6 +253,11 @@ end
 # -------------------------------------------------------------------------
 # Equation Construction
 # -------------------------------------------------------------------------
+"""
+    expr_to_symbolic(expr_str, symbolics)
+
+Evaluate a YAML equation expression against the model's symbolic environment.
+"""
 function expr_to_symbolic(expr_str::String, symbolics)
     # Build an sandbox mapping symbols -> symbolic variables
     # TODO - comment: not actually a sandbox if eval global const, 
@@ -247,11 +281,21 @@ function expr_to_symbolic(expr_str::String, symbolics)
     return Base.invokelatest(eval, Expr(:block, [:($(k) = $(v)) for (k, v) in env]..., parsed))
 end
 
+"""
+    expr_to_symbolic(expr, symbolics)
+
+Convert an expression to the symbolic form used by model equations.
+"""
 function expr_to_symbolic(expr::Expr, symbolics)
     # convert Expr to String and reuse the string method
     return expr_to_symbolic(string(expr), symbolics)
 end
 
+"""
+    build_equations(config, symbolics)
+
+Build ModelingToolkit equations from YAML equation strings.
+"""
 function build_equations(config::Dict, symbolics)
 
     eqs = Equation[]
@@ -271,6 +315,11 @@ end
 # Model Info Extraction
 # -------------------------------------------------------------------------
 
+"""
+    get_model_info(config)
+
+Read model name, description, and type from YAML data.
+"""
 function get_model_info(config::Dict)
 
     exp_cfg = get(config, "experiment", Dict())
@@ -291,7 +340,7 @@ end
 # -------------------------------------------------------------------------
 
 """
-    load_model_from_yaml(filename::String) -> ModelDefinition
+    load_model(filename::String) -> ModelDefinition
 
 Main entry point: loads, validates, and constructs a full model definition
 from a YAML file.

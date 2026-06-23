@@ -4,13 +4,9 @@ using SymbolicIndexingInterface
 using SciMLStructures: Tunable, replace, Initials, Constants, canonicalize
 
 """
-Model
+    Model(model_def, sys)
 
-A simulation wrapper for the ModelDefinition that creates and manages ODE Problems
-- can extend to other problems later
-
-Provides methods for simulation, parameter manipulation, and result visualisation
-
+Simulation wrapper around a `ModelDefinition` and compiled ModelingToolkit system.
 """
 
 # -------------------------------------------------------------------------
@@ -81,6 +77,11 @@ function get_uncertain_parameters(model::Model)
     return uncertain
 end
 
+"""
+    get_warmup_params(parameters; design=false)
+
+Return parameter warmup values keyed by symbol.
+"""
 function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, Float64}
     # check for a warm up stage, and start with warm up values
     warmup_map = Dict{Symbol, Float64}()
@@ -99,10 +100,20 @@ function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}; design::Bool
     return warmup_map
 end
 
+"""
+    get_warmup_setter_inputs(model; design=false)
+
+Return ordered warmup values and symbols for `setp`.
+"""
 function get_warmup_setter_inputs(model::Model; design::Bool=false)
     return get_warmup_setter_inputs(model.sys, model.model_def.parameters; design)
 end
 
+"""
+    get_warmup_setter_inputs(sys, parameters; design=false)
+
+Return system-ordered warmup setter inputs.
+"""
 function get_warmup_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)
     warmup_map = get_warmup_params(parameters; design)
     ordered_params = ModelingToolkit.parameters(sys)
@@ -126,6 +137,11 @@ end
 
 const MultiparamValue = Union{Float64, Tuple{Vararg{Float64}}}
 
+"""
+    extract_multiparams(parameters; design=false)
+
+Return scalar or staged parameter values that need production solves.
+"""
 function extract_multiparams(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, MultiparamValue}
     multiparams = Dict{Symbol, MultiparamValue}()
     for kv in pairs(parameters)
@@ -154,10 +170,20 @@ function extract_multiparams(parameters::Dict{Symbol, ParameterSpec}; design::Bo
     multiparams
 end
 
+"""
+    get_multiparam_setter_inputs(model; design=false)
+
+Return ordered multiparameter values and symbols for `setp`.
+"""
 function get_multiparam_setter_inputs(model::Model; design::Bool=false)
     return get_multiparam_setter_inputs(model.sys, model.model_def.parameters; design)
 end
 
+"""
+    get_multiparam_setter_inputs(sys, parameters; design=false)
+
+Return system-ordered multiparameter setter inputs.
+"""
 function get_multiparam_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)
     multiparams = extract_multiparams(parameters; design)
     ordered_params = ModelingToolkit.parameters(sys)
@@ -194,6 +220,11 @@ function get_multiparam_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpe
     )
 end
 
+"""
+    _multiparam_nums_are_constants(sys, multiparam_Nums) -> Bool
+
+Return whether all staged parameters are constants in the system.
+"""
 function _multiparam_nums_are_constants(sys, multiparam_Nums)::Bool
     isempty(multiparam_Nums) && return false
 
@@ -239,38 +270,11 @@ end
 
 
 """
-Simulate
+    simulate!(model, initial_conditions, tspan; kwargs...)
 
-    simulate!(model::Model, 
-              initial_conditions::Vector{Float64},
-              parameters::Dict,
-              tspan::Tuple{Float64, Float64};
-              solver=Tsit5(),
-              dt::Float64=0.01,
-              saveat=Float64[])
-
-Runs a simple one off simulation and stores the results
-
-# Arguments
-- `model`: The Model object to simulate
-- `initial_conditions`: Vector of initial values for each state variable
-- `parameters`: Dict mapping parameter symbols to values
-- `tspan`: Time span as (t_start, t_end)
-
-# Keyword Arguments
-- `solver`: ODE solver algorithm (default: Tsit5())
-- `dt`: Time step for solver (default: 0.01)
-- `saveat`: Specific time points to save (default: all points)
-- `return_simulate`: Return the warmup solution together with the production solutions
-- `design`: Use the design-stage warmup and multiparameter values
-
-# Returns
-- The production solution vector, or `(warmup_sol=..., sols=...)` when `return_simulate=true`
-
-SHOULD NOT MAKE ALTER THE MODEL!
-
+Run the model using YAML/default parameter values plus any supplied overrides.
+Returns production solutions, or `(warmup_sol, sols)` with `return_simulate=true`.
 """
-
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
                    tspan::Tuple{Float64, Float64}
@@ -391,18 +395,10 @@ end
 
 
 """
-Prepares the model for simulation, created onced for many evaluations.
+    setup_simulation!(model, initial_conditions, tspan; parameters=Dict())
 
-    setup_evaluation!(model::Model;
-                      t_obs::Vector{Float64},
-                      obs_state::Symbol,
-                      initial_conditions::Vector{Float64},
-                      tspan::Tuple{Float64, Float64},
-                      solver=Euler(),
-                      dt::Float64=0.01)
-
+Build and cache the ODE problem plus parameter setters used by `simulate!`.
 """
-
 function setup_simulation!(model::Model,
                           initial_conditions::Tuple{Vararg{Float64}},
                           tspan::Tuple{Float64, Float64};
@@ -488,7 +484,11 @@ function setup_simulation!(model::Model,
     return nothing
 end
 
-# helper to build all priors for all uncertain params
+"""
+    make_priors(model) -> Vector
+
+Build priors for tunable uncertain parameters in system order.
+"""
 function make_priors(model::Model)::Vector{Uniform{Float64}}
     ordered_params = ModelingToolkit.parameters(model.sys)
     tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
@@ -512,7 +512,11 @@ function make_priors(model::Model)::Vector{Uniform{Float64}}
     return priors
 end
 
-# helper to make a distribution object - currently only uniform supported but can extend to others
+"""
+    make_prior(prior) -> Distribution
+
+Build a prior distribution from YAML metadata.
+"""
 function make_prior(prior::Dict)
     dist = lowercase(prior["distribution"])
     if dist == "uniform"
@@ -522,6 +526,11 @@ function make_prior(prior::Dict)
     error("Unsupported prior distribution: $(prior["distribution"])")
 end
 
+"""
+    get_initial_tunables(model) -> Tuple
+
+Return initial uncertain parameter values in system tunable order.
+"""
 function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
     ordered_params = ModelingToolkit.parameters(model.sys)
     tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(model.sys))]
@@ -547,6 +556,11 @@ function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
     return Tuple(initial_tunable_values)
 end
 
+"""
+    validate_initial_tunables(symbols, initial_values, priors)
+
+Check that initial tunable values are inside their prior support.
+"""
 function validate_initial_tunables(symbols, initial_values, priors)
     for (s, initial_value, prior) in zip(symbols, initial_values, priors)
         if !isfinite(logpdf(prior, initial_value))

@@ -6,6 +6,11 @@ using SciMLBase: successful_retcode
 # using InteractiveUtils
 
 
+"""
+    run_inference(model, spec::TuringSpec)
+
+Run Bayesian inference with Turing and rename sampled parameters.
+"""
 function run_inference(model::Model, spec::TuringSpec)
 
     @info "Running Turing inference"
@@ -62,6 +67,11 @@ function run_inference(model::Model, spec::TuringSpec)
     return chain_named
 end
 
+"""
+    make_initial_params(model, spec)
+
+Build Turing initial parameters from model tunable defaults.
+"""
 function make_initial_params(model::Model, spec::TuringSpec)
     validate_initial_tunables(
         model.tunable_symbols,
@@ -82,12 +92,9 @@ end
 # -------------------------------------------------------------------------
 
 """
-    _build_turing_model(model, spec, metadata) -> Turing.Model
+    fit(model, spec, uncertain_priors, data)
 
-# Implementation
-- Uses model.evaluate_model() for predictions
-- Gets priors from metadata
-- Builds likelihood from spec
+Turing model used by `run_inference`.
 """
 @model function fit(model, spec, uncertain_priors, data; 
     prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing,
@@ -148,6 +155,11 @@ end
     data ~ MvNormal(predicted, σ^2 * I)
 end
 
+"""
+    _predicted_observations(sols, simulation) -> Vector
+
+Flatten observed states from one or more saved solutions.
+"""
 function _predicted_observations(sols, simulation::SimulationSpec)
     if isempty(sols)
         return Float64[]
@@ -157,6 +169,11 @@ function _predicted_observations(sols, simulation::SimulationSpec)
     return reduce(vcat, (vec(sol[state_position, :]) for sol in sols for state_position in saved_state_positions))
 end
 
+"""
+    _validate_observation_layout(data, simulation, n_solutions)
+
+Check that observed data length matches time points, states, and solution count.
+"""
 function _validate_observation_layout(data, simulation::SimulationSpec, n_solutions::Integer)
     block_length = length(simulation.t_obs) * observed_state_count(simulation)
 

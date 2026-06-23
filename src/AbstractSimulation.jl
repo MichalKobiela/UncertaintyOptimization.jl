@@ -81,14 +81,29 @@ function _normalize_observed_states(obs_state)
     return Tuple(states)
 end
 
+"""
+    observed_states(simulation) -> Tuple{Vararg{Symbol}}
+
+Return observed states as a tuple.
+"""
 function observed_states(simulation::SimulationSpec)
     return simulation.obs_state isa Symbol ? (simulation.obs_state,) : Tuple(simulation.obs_state)
 end
 
+"""
+    observed_state_count(simulation) -> Int
+
+Return the number of observed states.
+"""
 function observed_state_count(simulation::SimulationSpec)
     return length(observed_states(simulation))
 end
 
+"""
+    observed_state_index(sys, simulation) -> Int
+
+Return the state index for a single observed state.
+"""
 function observed_state_index(sys, simulation::SimulationSpec)
     states = observed_states(simulation)
     if length(states) != 1
@@ -98,6 +113,11 @@ function observed_state_index(sys, simulation::SimulationSpec)
     return observed_state_index(sys, only(states))
 end
 
+"""
+    observed_state_index(sys, obs_state) -> Int
+
+Resolve an observed state symbol against a compiled system.
+"""
 function observed_state_index(sys, obs_state::Symbol)
     state = try
         getproperty(sys, obs_state)
@@ -113,10 +133,20 @@ function observed_state_index(sys, obs_state::Symbol)
     return index
 end
 
+"""
+    observed_state_indices(sys, simulation) -> Vector{Int}
+
+Resolve all observed state indices for a simulation.
+"""
 function observed_state_indices(sys, simulation::SimulationSpec)
     return [observed_state_index(sys, state) for state in observed_states(simulation)]
 end
 
+"""
+    observed_state_save_idxs(sys, simulation)
+
+Return `save_idxs` compatible with the observed states.
+"""
 function observed_state_save_idxs(sys, simulation::SimulationSpec)
     indices = observed_state_indices(sys, simulation)
     return length(indices) == 1 ? only(indices) : indices

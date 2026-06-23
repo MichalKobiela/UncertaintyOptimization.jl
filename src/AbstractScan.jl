@@ -1,32 +1,16 @@
 """
-    CartesianSampler
+    ThompsonSpec
 
-Specification for grid-scan style inference/optimisation.
-
-Uses a shared `SimulationSpec` for simulation settings, plus:
-
-- `scan`: parameter scan axes
-- `loss`: user-provided loss function used to score a scan candidate
-
-Example
-```julia
-spec = CartesianSampler(
-    simulation = sim_spec,
-    scan = [
-        (symbol = "kx2", values = LinRange(0.01, 3, 100), kind = :scale),
-        (symbol = "kx3", values = LinRange(0.01, 3, 100), kind = :scale),
-    ],
-    loss = loss,
-)
-```
+Base type for scan specifications.
 """
-
-
-# this a spec that defines how to apply a loss function to the posterior
 abstract type ThompsonSpec end
 
 
+"""
+    ThompsonGridSpec(; simulation, scan, loss)
 
+Grid-scan specification using a shared `SimulationSpec`.
+"""
 struct ThompsonGridSpec <: ThompsonSpec
     simulation::SimulationSpec
     scan::Vector{NamedTuple{(:symbol, :values, :kind), Tuple{Symbol, Vector{Float64}, Symbol}}}
@@ -66,8 +50,18 @@ struct ThompsonGridSpec <: ThompsonSpec
     end
 end
 
+"""
+    CartesianSampler
+
+Alias for `ThompsonGridSpec`.
+"""
 const CartesianSampler = ThompsonGridSpec
 
+"""
+    _scan_combinations(scan)
+
+Build the Cartesian product of scan axis values.
+"""
 function _scan_combinations(scan)
     combinations = [Float64[]]
 
