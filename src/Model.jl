@@ -1,7 +1,7 @@
 using ModelingToolkit
 using OrdinaryDiffEq
 using SymbolicIndexingInterface
-using SciMLStructures: Tunable, replace, Initials
+using SciMLStructures: Tunable, replace, Initials, Constants, canonicalize
 
 """
 Model
@@ -36,12 +36,14 @@ mutable struct Model
     # the ordered "lists" of values for the setter
     # the first tuple has the values across all parameters for the first part
     multiparam_values::Tuple{Vararg{Tuple}}
+    multiparam_constants_only::Bool
 
     ## separately prepare the setters for design stage
     design_warmup_setter!::Any
     design_warmup_values::Tuple{Vararg{Float64}}
     design_multiparam_setter!::Any
     design_multiparam_values::Tuple{Vararg{Tuple}}
+    design_multiparam_constants_only::Bool
     
     # Constructor
     function Model(model_def::ModelDefinition, sys::Any)
@@ -51,11 +53,11 @@ mutable struct Model
         # warmup
         nothing, () :: Tuple{Vararg{Float64}},
         # multiparams
-        nothing, () :: Tuple{Vararg{Float64}},
+        nothing, () :: Tuple{Vararg{Float64}}, false,
         # design warmup
         nothing, () :: Tuple{Vararg{Float64}},
         # design multiparam
-        nothing, () :: Tuple{Vararg{Float64}},
+        nothing, () :: Tuple{Vararg{Float64}}, false,
         )
     end
 end
@@ -192,6 +194,19 @@ function get_multiparam_setter_inputs(sys, parameters::Dict{Symbol, ParameterSpe
     )
 end
 
+function _multiparam_nums_are_constants(sys, multiparam_Nums)::Bool
+    isempty(multiparam_Nums) && return false
+
+    for num in multiparam_Nums
+        idx = SymbolicIndexingInterface.parameter_index(sys, num)
+        if isnothing(idx) || !(idx.portion isa Constants)
+            return false
+        end
+    end
+
+    return true
+end
+
 # -------------------------------------------------------------------------
 # Inference hook
 # -------------------------------------------------------------------------
@@ -290,6 +305,7 @@ function simulate!(model::Model,
     warmup_setter! = design ? model.design_warmup_setter! : model.warmup_setter!
     stage_multiparam_values = design ? model.design_multiparam_values : model.multiparam_values
     stage_multiparam_setter! = design ? model.design_multiparam_setter! : model.multiparam_setter!
+    stage_multiparam_constants_only = design ? model.design_multiparam_constants_only : model.multiparam_constants_only
 
     multiparam_length = isempty(stage_multiparam_values) ? 1 : length(stage_multiparam_values)
     if isnothing(prealloc_results_vector)
@@ -330,20 +346,40 @@ function simulate!(model::Model,
     opts_prod = isempty(saveat) ? opts_prod : merge(opts_prod, (saveat=saveat, ))
     opts_prod = isnothing(save_idxs) ? opts_prod : merge(opts_prod, (save_idxs=save_idxs, ))
 
-    for i in 1:multiparam_length
+    use_threaded_constants = (
+        multiparam_length > 1 &&
+        Base.Threads.nthreads() > 1 &&
+        stage_multiparam_constants_only &&
+        isnothing(parameter_setter)
+    )
 
-        # set all multiparameters
-        if !isempty(stage_multiparam_values)
-            stage_multiparam_setter!(p_work, stage_multiparam_values[i])
+    if use_threaded_constants
+        # Each production solve only changes constants such as `cuma`; isolate that
+        # storage per thread and remake the problem so ODE internals are not shared.
+        base_constants = canonicalize(Constants(), p_work)[1]
+
+        Base.Threads.@threads for i in 1:multiparam_length
+            p_i = replace(Constants(), p_work, collect(base_constants))
+            stage_multiparam_setter!(p_i, stage_multiparam_values[i])
+            prob_i = remake(prob; p=p_i)
+            sol = solve(prob_i, solver; opts_prod...)
+            prealloc_results_vector[i] = sol
         end
+    else
+        for i in 1:multiparam_length
+            # set all multiparameters
+            if !isempty(stage_multiparam_values)
+                stage_multiparam_setter!(p_work, stage_multiparam_values[i])
+            end
 
-        if !isnothing(parameter_setter)
-            parameter_setter(p_work, parameter_values)
+            if !isnothing(parameter_setter)
+                parameter_setter(p_work, parameter_values)
+            end
+
+            sol = solve(prob, solver; p=p_work, opts_prod...)
+
+            prealloc_results_vector[i] = sol
         end
-
-        sol = solve(prob, solver; p=p_work, opts_prod...)
-
-        prealloc_results_vector[i] = sol
     end
 
     if return_simulate
@@ -431,10 +467,12 @@ function setup_simulation!(model::Model,
     multiparam_values, multiparam_Nums = get_multiparam_setter_inputs(model)
     model.multiparam_values = multiparam_values
     model.multiparam_setter! = isempty(multiparam_Nums) ? nothing : setp(model.sys, multiparam_Nums)
+    model.multiparam_constants_only = _multiparam_nums_are_constants(model.sys, multiparam_Nums)
 
     design_multiparam_values, design_multiparam_Nums = get_multiparam_setter_inputs(model; design=true)
     model.design_multiparam_values = design_multiparam_values
     model.design_multiparam_setter! = isempty(design_multiparam_Nums) ? nothing : setp(model.sys, design_multiparam_Nums)
+    model.design_multiparam_constants_only = _multiparam_nums_are_constants(model.sys, design_multiparam_Nums)
 
     ## tunable
     ordered_params = ModelingToolkit.parameters(model.sys)

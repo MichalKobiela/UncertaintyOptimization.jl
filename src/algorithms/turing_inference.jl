@@ -29,12 +29,13 @@ function run_inference(model::Model, spec::TuringSpec)
 
     # preallocate for the hot loop the results vector
     results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
-    _validate_observation_layout(spec.data, spec.simulation, results_num)
+    observed_data = vec(spec.data)
+    _validate_observation_layout(observed_data, spec.simulation, results_num)
 
     prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
 
     # 2. Build turing model
-    fit_fcn = fit(model, spec, model.tunable_priors, spec.data; 
+    fit_fcn = fit(model, spec, model.tunable_priors, observed_data;
         prealloc_results_vector=prealloc_results_vector)
     #fit_fcn = optim_model()
 
@@ -119,7 +120,6 @@ end
     end
 
     predicted = _predicted_observations(sols, simulation)
-    observed_data = vec(data)
 
     # empty the results for the next run
     # empty!(sols)
@@ -132,8 +132,8 @@ end
         return
     end
 
-    if length(predicted) != length(observed_data)
-        @debug "Predicted observations and data have different lengths" predicted_size=size(predicted) data_size=size(observed_data) predicted_length=length(predicted) data_length=length(observed_data)
+    if length(predicted) != length(data)
+        @debug "Predicted observations and data have different lengths" predicted_size=size(predicted) data_size=size(data) predicted_length=length(predicted) data_length=length(data)
         Turing.@addlogprob! -1e10
         return
     end
@@ -145,7 +145,7 @@ end
         return
     end    
 
-    observed_data ~ MvNormal(predicted, σ^2 * I)
+    data ~ MvNormal(predicted, σ^2 * I)
 end
 
 function _predicted_observations(sols, simulation::SimulationSpec)

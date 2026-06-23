@@ -47,7 +47,7 @@ data_selected = vcat(data[:,2], data[:,5], data[:,9])
 
 rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
-nuts = NUTS(0.5, init_ϵ = 0.003, max_depth=9)
+nuts = NUTS(0.5, init_ϵ = 0.0065, max_depth=8)
 sim_spec = SimulationSpec(
     t_obs = time,
     obs_state = :A,
@@ -63,7 +63,7 @@ turing_spec = TuringSpec(
     noise_prior = InverseGamma(2, 3), 
     noise_initial = 3.0, 
     sampler = NUTS(0.5, init_ϵ = 0.006, metricT = DenseEuclideanMetric),
-    n_samples = 3,
+    n_samples = 3000,
     n_chains = 1,
 )
 
@@ -71,6 +71,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a5.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a9_parallel_modelData.jls"), "w") do f
     serialize(f, chain)
 end

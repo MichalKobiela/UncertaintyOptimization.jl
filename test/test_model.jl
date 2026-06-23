@@ -446,6 +446,54 @@ end
         
 
     end
+
+    @testset "Test multiparam simulation" begin
+        @variables Y(t)
+        k = UncertaintyOptimization.create_param("k")
+
+        eqs = [
+            Differential(t)(Y) ~ k
+        ]
+
+        params = Dict{Symbol, UncertaintyOptimization.ParameterSpec}(
+            :k => UncertaintyOptimization.ParameterSpec(
+                "k",
+                k,
+                :fixed,
+                (1.0, 2.0, 3.0),
+                0.0,
+                nothing,
+                nothing,
+                nothing,
+                nothing,
+            ),
+        )
+
+        model_def = UncertaintyOptimization.ModelDefinition(
+            "MultiparamSimulation",
+            "Tiny model for validating isolated multiparam solves",
+            :ODE,
+            eqs,
+            Dict(:Y => Y),
+            params,
+            nothing,
+        )
+
+        @mtkcompile multiparam_simulation_sys = System(model_def.equations, t)
+        model = UncertaintyOptimization.Model(model_def, multiparam_simulation_sys)
+
+        sols = simulate!(
+            model,
+            (0.0,),
+            (0.0, 1.0);
+            solver=Euler(),
+            solver_opts=(dt=0.1,),
+            saveat=[1.0],
+        )
+
+        @test length(sols) == 3
+        @test [Array(sol)[end] for sol in sols] ≈ [1.0, 2.0, 3.0]
+    end
     
 end
 

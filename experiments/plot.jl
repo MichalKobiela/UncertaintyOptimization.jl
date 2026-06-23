@@ -21,7 +21,7 @@ chain_1 = open(string(@__DIR__)*"/reference/rpareal_chain_reference.jls", "r") d
         deserialize(io)
 end
 
-chain_2 = open(string(@__DIR__)*"/minmtk_c52_nuts0.5_e0.003_DEM_tsitRB23_j12.6updated.jls", "r") do io
+chain_2 = open(string(@__DIR__)*"/mtk_a7_parallel.jls", "r") do io
         deserialize(io)
 end
 
