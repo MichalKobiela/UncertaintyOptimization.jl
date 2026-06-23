@@ -502,6 +502,46 @@ end
         @test Array(sol) == expected
     end
 
+    @testset "RPA real YAML default snapshot regression" begin
+        yaml_file = joinpath(@__DIR__, "test-data", "RPA_real", "opt.yml")
+        model_def = load_model(yaml_file)
+
+        @mtkcompile rpa_real_yaml_snapshot_sys = System(model_def.equations, t)
+        model = UncertaintyOptimization.Model(model_def, rpa_real_yaml_snapshot_sys)
+
+        sim = simulate!(
+            model,
+            (24.0, 350.0),
+            (0.0, 10.0);
+            solver=Euler(),
+            solver_opts=(dt=0.01,),
+            saveat=[0.0, 2.5, 5.0, 7.5, 10.0],
+            return_simulate=true,
+        )
+
+        expected_solutions = [
+            [
+                3.3815244670288163 8.192509924511345 7.969672732270899 6.767388503891475 5.920390469726845;
+                6580.152516266154 1520.9485392846877 323.62129316933294 93.35172926561262 72.99252391239679
+            ],
+            [
+                3.3815244670288163 24.498424541092337 23.299128953927845 15.340392550821216 8.120004783242111;
+                6580.152516266154 1182.8023380420864 205.04816021088598 36.97812122375999 21.23336483453114
+            ],
+            [
+                3.3815244670288163 26.326602510301633 25.03061339147783 16.403515692549345 8.239909524141869;
+                6580.152516266154 1178.1462000874437 203.94301028197307 36.468064341025716 19.84374362705852
+            ],
+        ]
+
+        @test model.warmup_values == (2.0e-6,)
+        @test model.multiparam_values == ((2.0e-5,), (0.0001,), (0.001,))
+        @test model.tunable_symbols == (:alpha_3, :beta_3, :beta_2, :nx1, :alpha_4, :nx2, :alpha_2, :kx2, :beta_1, :r1, :kx1, :r2, :kr, :alpha_1, :nr, :beta_4)
+        @test model.tunable_initial == (17.7437, 0.6644, 0.00039, 2.34, 8.7519e6, 1.3, 25.0, 36.4063, 11.9586, 89.0635, 1.28e-8, 7.0188, 0.51, 83.4743, 3.2, 7.1347)
+        @test sim.warmup_sol.u[end] == [3.3815244670288163, 6580.152516266154]
+        @test [Array(sol) for sol in sim.sols] == expected_solutions
+    end
+
     @testset "Test multiparam simulation" begin
         @variables Y(t)
         k = UncertaintyOptimization.create_param("k")
