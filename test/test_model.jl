@@ -447,6 +447,61 @@ end
 
     end
 
+    @testset "RPA default snapshot regression" begin
+        model_def = MockRPA.mock_rpa_model()
+
+        @mtkcompile rpa_snapshot_sys = System(model_def.equations, t)
+        model = UncertaintyOptimization.Model(model_def, rpa_snapshot_sys)
+
+        default_parameters = Dict{Symbol, Float64}(
+            name => Float64(spec.value)
+            for (name, spec) in model_def.parameters
+            if spec.value isa Real
+        )
+
+        expected_default_parameters = Dict{Symbol, Float64}(
+            :alpha_1 => 100.0,
+            :alpha_2 => 100.0,
+            :beta_RA => 0.0,
+            :beta_AB => 0.0,
+            :beta_BA => 0.0,
+            :beta_BB => 0.0,
+            :gamma_A => 1.0,
+            :gamma_B => 1.0,
+            :n_RA => 1.0,
+            :n_BA => 1.0,
+            :n_AB => 1.0,
+            :n_BB => 1.0,
+            :K_IR => 1.0,
+            :K_TF => 1.0,
+            :K_BA => 1.0,
+            :K_AB => 1.0,
+            :K_BB => 1.0,
+        )
+
+        t_obs = [0.0, 25.0, 50.0, 75.0, 100.0]
+        sol = only(simulate!(
+            model,
+            (1.0, 1.0),
+            (0.0, 100.0);
+            parameters=default_parameters,
+            solver=Euler(),
+            solver_opts=(dt=1.0,),
+            saveat=t_obs,
+        ))
+
+        expected = [
+            1.0 1.4630413659093031 1.4630541869895848 1.068327676406137 1.0683453199941857;
+            1.0 39.5994728977116 39.59999999556567 47.34649267976007 47.3478260430652
+        ]
+
+        # Exact equality is intentional: this is a golden snapshot for default behavior.
+        @test default_parameters == expected_default_parameters
+        @test model.tunable_symbols == (:beta_BA, :beta_AB, :beta_RA, :beta_BB)
+        @test model.tunable_initial == (0.0, 0.0, 0.0, 0.0)
+        @test Array(sol) == expected
+    end
+
     @testset "Test multiparam simulation" begin
         @variables Y(t)
         k = UncertaintyOptimization.create_param("k")
