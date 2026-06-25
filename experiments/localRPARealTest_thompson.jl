@@ -105,22 +105,9 @@ end
 sort!(evaluation, :kx2_scaler)
 CSV.write("evaluation.csv", evaluation)
 
-expanded_indices = [
-    row_index
-    for row_index in 1:nrow(evaluation)
-    for _ in 1:evaluation.thompson_count[row_index]
-]
-expanded_evaluation = evaluation[expanded_indices, :]
-CSV.write("evaluation_expanded.csv", expanded_evaluation)
-
-
-med_res = expanded_evaluation.median_loss
-quant_res = expanded_evaluation.q75_loss
-std_res = expanded_evaluation.std_loss
-
 evaluation_plot = Plots.scatter(
-    med_res,
-    quant_res,
+    evaluation.median_loss,
+    evaluation.q75_loss,
     xlabel = "Median Residue",
     ylabel = "Quantile Residue",
     title = "Evaluation of Thompson Samples",
@@ -128,14 +115,13 @@ evaluation_plot = Plots.scatter(
     color = "blue",
 )
 
-indices = findall((med_res .< 344) .& (quant_res .< 387))
-good_values = expanded_evaluation.kx2_scaler[indices]
-centroid = isempty(good_values) ? missing : mean(good_values)
+indices = findall((evaluation.median_loss .< 344) .& (evaluation.q75_loss .< 387))
+good_values = evaluation.kx2_scaler[indices]
 
 Plots.scatter!(
     evaluation_plot,
-    med_res[indices],
-    quant_res[indices],
+    evaluation.median_loss[indices],
+    evaluation.q75_loss[indices],
     xlabel = "Median Residue",
     ylabel = "Quantile Residue",
     title = "Evaluation of Thompson Samples",
@@ -144,7 +130,7 @@ Plots.scatter!(
 )
 
 CSV.write("indices.csv", DataFrame(index = indices))
-CSV.write("medians.csv", DataFrame(median_loss = med_res))
-CSV.write("quantiles.csv", DataFrame(q75_loss = quant_res))
+CSV.write("medians.csv", DataFrame(median_loss = evaluation.median_loss))
+CSV.write("quantiles.csv", DataFrame(q75_loss = evaluation.q75_loss))
 CSV.write("good_values.csv", DataFrame(kx2_scaler = good_values))
 Plots.savefig(evaluation_plot, "evaluation_scatter.png")
