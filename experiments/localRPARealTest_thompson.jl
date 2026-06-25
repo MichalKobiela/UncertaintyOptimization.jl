@@ -18,6 +18,7 @@ using Plots
 using DataFrames
 using Random
 using Statistics
+using StatsBase: countmap
 
 
 RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
@@ -75,53 +76,40 @@ thompson_best = thompson_samples[thompson_samples.is_best, :]
 CSV.write("thompson_samples.csv", thompson_best)
 
 
-## evaluate the unique kx2 scalers for each posterior
-count_by_scaler = Dict(
-    key.kx2_scaler => nrow(group)
-    for (key, group) in pairs(groupby(thompson_best, :kx2_scaler))
-)
-
-candidate_scalers = sort!(collect(keys(count_by_scaler)))
+## count how often each scaler occurs
+kx2_scaler_count = countmap(thompson_best.kx2_scaler)
 
 eval_scan = CartesianScanner(
     simulation = sim_spec,
-    scan = [(symbol = :kx2, values = candidate_scalers, kind = :scale)],
+    scan = [(symbol = :kx2, values = collect(keys(kx2_scaler_count)), kind = :scale)],
     loss = loss,
 )
 
 eval_results = run_scan(posterior, eval_scan, model)
 
-evaluation = DataFrame(
-    kx2_scaler = Float64[],
-    median_loss = Float64[],
-    q75_loss = Float64[],
-    std_loss = Float64[],
-    thompson_count = Int[],
-)
-
-for eval_group in groupby(eval_results, :kx2_scaler)
+evaluation = combine(groupby(eval_results, :kx2_scaler)) do eval_group
     # extract all the losses across posterior for this kx2 scaler
     kx2_scaler = first(eval_group.kx2_scaler)
     losses = eval_group.loss
-    thompson_count = count_by_scaler[kx2_scaler]
+    thompson_count = kx2_scaler_count[kx2_scaler]
     expanded_losses = repeat(losses, thompson_count)
 
-    push!(evaluation, (
-        kx2_scaler = kx2_scaler,
+    return (
         median_loss = median(expanded_losses),
         q75_loss = quantile(expanded_losses, 0.75),
         std_loss = std(expanded_losses),
         thompson_count = thompson_count,
-    ))
+    )
 end
 
 sort!(evaluation, :kx2_scaler)
 CSV.write("evaluation.csv", evaluation)
 
-expanded_indices = Int[]
-for row_index in 1:nrow(evaluation)
-    append!(expanded_indices, fill(row_index, evaluation.thompson_count[row_index]))
-end
+expanded_indices = [
+    row_index
+    for row_index in 1:nrow(evaluation)
+    for _ in 1:evaluation.thompson_count[row_index]
+]
 expanded_evaluation = evaluation[expanded_indices, :]
 CSV.write("evaluation_expanded.csv", expanded_evaluation)
 
