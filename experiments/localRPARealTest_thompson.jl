@@ -71,26 +71,16 @@ thompson_scan = CartesianScanner(
 
 thompson_samples = run_scan(posterior, thompson_scan, model)
 thompson_best = thompson_samples[thompson_samples.is_best, :]
-posterior_kx2 = posterior.kx2[thompson_best.iteration]
 
-summary_best = DataFrame(
-    posterior_index = thompson_best.iteration,
-    posterior_kx2 = posterior_kx2,
-    kx2_scaler = thompson_best.kx2_scaler,
-    best_kx2 = thompson_best.kx2_value,
-    best_loss = thompson_best.best_loss,
-)
-
-CSV.write("thompson_samples.csv", summary_best)
+CSV.write("thompson_samples.csv", thompson_best)
 
 
-## evaluate now the unique kx2 scalers for each posterior
+## evaluate the unique kx2 scalers for each posterior
 scaler_counts = combine(
-    groupby(summary_best, :kx2_scaler),
+    groupby(thompson_best, :kx2_scaler),
     nrow => :thompson_count,
 )
 sort!(scaler_counts, :kx2_scaler)
-scaler_counts.thompson_weight = scaler_counts.thompson_count ./ nrow(summary_best)
 
 candidate_scalers = scaler_counts.kx2_scaler
 
@@ -102,7 +92,6 @@ eval_scan = CartesianScanner(
 
 eval_results = run_scan(posterior, eval_scan, model)
 count_by_scaler = Dict(scaler_counts.kx2_scaler .=> scaler_counts.thompson_count)
-weight_by_scaler = Dict(scaler_counts.kx2_scaler .=> scaler_counts.thompson_weight)
 
 evaluation = DataFrame(
     kx2_scaler = Float64[],
@@ -110,7 +99,6 @@ evaluation = DataFrame(
     q75_loss = Float64[],
     std_loss = Float64[],
     thompson_count = Int[],
-    thompson_weight = Float64[],
 )
 
 for eval_group in groupby(eval_results, :kx2_scaler)
@@ -126,7 +114,6 @@ for eval_group in groupby(eval_results, :kx2_scaler)
         q75_loss = quantile(expanded_losses, 0.75),
         std_loss = std(expanded_losses),
         thompson_count = thompson_count,
-        thompson_weight = weight_by_scaler[kx2_scaler],
     ))
 end
 
