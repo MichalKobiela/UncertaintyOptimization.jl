@@ -9,7 +9,16 @@ using SciMLBase: successful_retcode
 """
     run_inference(model, spec::TuringSpec)
 
-Run Bayesian inference with Turing and rename sampled parameters.
+Run Bayesian inference with Turing.
+
+This method implements the inference stage for `TuringSpec`. It prepares the
+model for the shared `SimulationSpec`, builds priors for YAML parameters marked
+`:uncertain`, constructs the Turing model, samples with the configured sampler,
+and renames sampled chain columns from Turing's internal array names back to the
+model parameter symbols.
+
+The returned chain can be passed directly, or after thinning/subsampling, to
+`run_scan` for Thompson sampling and evaluation.
 """
 function run_inference(model::Model, spec::TuringSpec)
 
@@ -71,6 +80,10 @@ end
     make_initial_params(model, spec)
 
 Build Turing initial parameters from model tunable defaults.
+
+The initial uncertain-parameter values come from YAML and are ordered to match
+the compiled system's tunable parameters. The observation noise starts at
+`spec.noise_initial`.
 """
 function make_initial_params(model::Model, spec::TuringSpec)
     validate_initial_tunables(
@@ -95,6 +108,10 @@ end
     fit(model, spec, uncertain_priors, data)
 
 Turing model used by `run_inference`.
+
+For each posterior proposal, this model calls `simulate!` with the proposed
+uncertain parameters, flattens the saved observations, validates that the solve
+was successful, and scores the supplied data under a Gaussian observation model.
 """
 @model function fit(model, spec, uncertain_priors, data; 
     prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing,
@@ -159,6 +176,9 @@ end
     _predicted_observations(sols, simulation) -> Vector
 
 Flatten observed states from one or more saved solutions.
+
+The order is solution-major, then observed-state-major, then time-major. This
+is the same layout expected by `_validate_observation_layout`.
 """
 function _predicted_observations(sols, simulation::SimulationSpec)
     if isempty(sols)
@@ -173,6 +193,9 @@ end
     _validate_observation_layout(data, simulation, n_solutions)
 
 Check that observed data length matches time points, states, and solution count.
+
+This catches mismatches before the sampler starts, which is especially useful
+when a YAML parameter has tuple-valued staged production solves.
 """
 function _validate_observation_layout(data, simulation::SimulationSpec, n_solutions::Integer)
     block_length = length(simulation.t_obs) * observed_state_count(simulation)

@@ -6,6 +6,13 @@ using DataFrames
 
 Run a grid scan for each sample in `samples` using the Cartesian product of `spec.scan`.
 
+This is the shared engine for two workflow stages:
+
+- Thompson sampling: pass posterior samples and a candidate grid; select the
+  `is_best` row for each posterior iteration.
+- Evaluation: pass posterior samples and a reduced grid of candidate designs;
+  aggregate the returned `loss` values across iterations.
+
 By default, each candidate is evaluated using the settings from
 `spec.simulation`. The posterior sample is converted into the model's tunable parameter
 order, each scan axis is updated according to its `kind`, and the loss is evaluated as:
@@ -33,7 +40,8 @@ Scan values are expanded into columns named from each scan axis, for example
 `kx2_scaler` for `(symbol = :kx2, kind = :scale)` and `kx2_value` for
 the resolved parameter value used by the simulation. For `(symbol = :kx2,
 kind = :value)`, only `kx2_value` is emitted because the grid value is already
-the resolved parameter value.
+the resolved parameter value. Each row also includes `loss`, `is_best`, and
+`best_loss`.
 """
 function run_scan(samples, spec::ThompsonGridSpec, model::Model; evaluator = nothing)
     if isnothing(model.prob)

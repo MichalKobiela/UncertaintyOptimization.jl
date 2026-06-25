@@ -4,12 +4,15 @@ using ModelingToolkit
 const IV = ModelingToolkit.t_nounits
 
 
-""" 
-The aim of this module is to be responsible for reading in a YAML and creating the correct
-    structure/format so that it can be used for any type of problem.
+"""
+Model loading utilities for turning a YAML experiment description into the
+symbolic pieces needed by the rest of the package.
 
-    INPUT: YAML
-    OUTPUT: Struct
+The loader is the first stage of the workflow: it reads the declarative model
+definition, validates the required sections, creates ModelingToolkit states and
+parameters, and returns a `ModelDefinition`. Simulation settings such as time
+points, initial conditions, solver choice, and observed states are supplied
+later through `SimulationSpec`.
 """
 
 # -------------------------------------------------------------------------
@@ -19,7 +22,12 @@ The aim of this module is to be responsible for reading in a YAML and creating t
 """
     Design
 
-Design-stage warmup and production values for a parameter.
+Design-stage values for a parameter.
+
+`warmup_value` is used during the optional warmup solve in the design stage.
+`value` is used during the production solve after warmup. These fields are read
+from a parameter's `design:` block in YAML and allow a design/evaluation run to
+use values that differ from the ordinary simulation or inference values.
 """
 struct Design
     warmup_value:: Union{Nothing, Float64} 
@@ -31,6 +39,18 @@ end
     ParameterSpec
 
 Parameter metadata parsed from YAML.
+
+Each parameter has a `role`:
+
+- `:fixed` parameters keep the scalar `value` supplied in YAML.
+- `:uncertain` parameters become tunable ModelingToolkit parameters and must
+  provide a prior when used for Turing inference.
+- `:design` parameters are candidates for design-stage scans and may also
+  define `bounds`, staged `value`s, `warmup_value`, or a nested `design` block.
+
+Scalar values are used directly when building an `ODEProblem`. Tuple-valued
+parameters represent staged production solves: `simulate!` runs one solve per
+tuple entry after any warmup solve has completed.
 """
 struct ParameterSpec
     name::String # paramater name
@@ -49,6 +69,18 @@ end
     ModelDefinition
 
 Symbolic model, states, parameters, and input expression parsed from YAML.
+
+A `ModelDefinition` is intentionally declarative. It stores the parsed model
+name and description, the model type, ModelingToolkit equations, symbolic
+states, parameter specifications, and the generated input signal. Compile it
+with ModelingToolkit and wrap it in `Model` before simulation, inference, or
+scan stages:
+
+```julia
+model_def = load_model("model.yml")
+@mtkcompile sys = System(model_def.equations, t)
+model = Model(model_def, sys)
+```
 """
 struct ModelDefinition
     model_name::String
@@ -68,8 +100,11 @@ end
 """
     load_YAML(filename::String) -> Dict
 
-Loads and parses a YAML file. Throws an error if the file does not exist.
+Load and parse a YAML file.
 
+This is a low-level helper used by `load_model`. It returns the YAML content as
+a dictionary when `filename` exists, and returns `nothing` after emitting a
+warning when the file cannot be found.
 """
 
 function load_YAML(filename:: String)
@@ -112,8 +147,13 @@ end
 # -------------------------------------------------------------------------
 
 """
-    validate_YAML(config::Dict)
+    validate_YAML(config::Dict) -> Bool
 
+Validate the sections that are required to build a symbolic model.
+
+The current loader expects `experiment`, `model`, `parameters`, and `equations`
+sections. It also checks that every equation targets a declared state and that
+the equation strings parse as Julia expressions.
 """
 function validate_YAML(config::Dict)
     # Check the required tags are there
@@ -319,6 +359,9 @@ end
     get_model_info(config)
 
 Read model name, description, and type from YAML data.
+
+The information is copied into `ModelDefinition` and is useful for generated
+documentation, logging, and later provenance of inference or design results.
 """
 function get_model_info(config::Dict)
 
@@ -342,9 +385,24 @@ end
 """
     load_model(filename::String) -> ModelDefinition
 
-Main entry point: loads, validates, and constructs a full model definition
-from a YAML file.
+Load a model definition from YAML.
 
+This is the public entry point for the YAML stage. It reads the file with
+`load_YAML`, validates the required model sections, builds ModelingToolkit
+states and parameters, converts equation strings to symbolic equations, and
+returns a `ModelDefinition`.
+
+The YAML file describes the model structure:
+
+- `experiment`: name and description.
+- `model`: model type and state names.
+- `parameters`: fixed, uncertain, and design parameter metadata.
+- `equations`: right-hand sides for each state equation.
+- `inputs`: currently a step input signal.
+
+The returned definition is not yet an executable ODE problem. Compile it and
+wrap it in a `Model`, then use `SimulationSpec`, `simulate!`, `TuringSpec`, or
+`CartesianScanner` for later workflow stages.
 """
 
 function load_model(filename::String)

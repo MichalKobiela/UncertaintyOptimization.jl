@@ -1,7 +1,25 @@
 """
-    SimulationSpec
+    SimulationSpec(; t_obs, obs_state, initial_conditions, tspan,
+                   uncertain_param_values=Dict(), solver=Euler(),
+                   solver_opts=NamedTuple())
 
-Shared simulation settings that can be reused by inference and scan specs.
+Shared settings for the simulation/build stage.
+
+`SimulationSpec` captures the parts of a run that are not part of the YAML model
+definition: observation times, observed state or states, initial conditions, the
+time span, solver, and solver keyword options. The same spec can be reused by
+`TuringSpec` for inference and by `ThompsonGridSpec`/`CartesianScanner` for
+Thompson-style scans and later evaluation.
+
+Fields:
+
+- `t_obs`: time points saved for observations and loss evaluation.
+- `obs_state`: one state name or a collection of state names to observe.
+- `initial_conditions`: initial values in the compiled system's unknown order.
+- `tspan`: `(start, stop)` integration interval.
+- `uncertain_param_values`: optional values for uncertain parameters.
+- `solver`: OrdinaryDiffEq-compatible solver object.
+- `solver_opts`: keyword options passed through to `solve`.
 """
 struct SimulationSpec
     t_obs::Vector{Float64}
@@ -85,6 +103,9 @@ end
     observed_states(simulation) -> Tuple{Vararg{Symbol}}
 
 Return observed states as a tuple.
+
+`SimulationSpec` accepts either a single state or multiple states. This helper
+normalizes both cases for code that needs to iterate over observations.
 """
 function observed_states(simulation::SimulationSpec)
     return simulation.obs_state isa Symbol ? (simulation.obs_state,) : Tuple(simulation.obs_state)
@@ -103,6 +124,9 @@ end
     observed_state_index(sys, simulation) -> Int
 
 Return the state index for a single observed state.
+
+Use this when `simulation` observes exactly one state. For multi-state
+observations, use `observed_state_indices`.
 """
 function observed_state_index(sys, simulation::SimulationSpec)
     states = observed_states(simulation)
@@ -116,7 +140,7 @@ end
 """
     observed_state_index(sys, obs_state) -> Int
 
-Resolve an observed state symbol against a compiled system.
+Resolve an observed state symbol against a compiled ModelingToolkit system.
 """
 function observed_state_index(sys, obs_state::Symbol)
     state = try
@@ -137,6 +161,8 @@ end
     observed_state_indices(sys, simulation) -> Vector{Int}
 
 Resolve all observed state indices for a simulation.
+
+The returned indices are in the same order as `observed_states(simulation)`.
 """
 function observed_state_indices(sys, simulation::SimulationSpec)
     return [observed_state_index(sys, state) for state in observed_states(simulation)]
@@ -146,6 +172,9 @@ end
     observed_state_save_idxs(sys, simulation)
 
 Return `save_idxs` compatible with the observed states.
+
+This returns an `Int` for a single observed state and a vector of indices for
+multiple states, matching the forms accepted by SciML's `solve` keyword.
 """
 function observed_state_save_idxs(sys, simulation::SimulationSpec)
     indices = observed_state_indices(sys, simulation)

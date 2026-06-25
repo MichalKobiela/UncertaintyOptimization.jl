@@ -1,7 +1,11 @@
 """
     ThompsonSpec
 
-Base type for scan specifications.
+Base type for Thompson-style scan specifications.
+
+Scan specs describe a candidate design space and a loss function. `run_scan`
+evaluates that design space for each posterior sample, which supports both the
+Thompson sampling stage and the later evaluation stage.
 """
 abstract type ThompsonSpec end
 
@@ -10,6 +14,27 @@ abstract type ThompsonSpec end
     ThompsonGridSpec(; simulation, scan, loss)
 
 Grid-scan specification using a shared `SimulationSpec`.
+
+`ThompsonGridSpec` defines the design candidates considered for each posterior
+sample. `scan` is a collection of named tuples with:
+
+- `symbol`: parameter to modify.
+- `values`: candidate values or scale factors.
+- `kind`: either `:scale` or `:value`.
+
+For `kind = :scale`, each grid value multiplies the posterior draw when the
+symbol is uncertain, or the scalar YAML value when the symbol is fixed/design.
+For `kind = :value`, the grid value is used directly as the parameter value.
+
+`loss` receives the evaluated simulation output and returns a scalar. The
+default evaluator calls:
+
+```julia
+loss(warmup_sol, predicted_sol; sys=model.sys)
+```
+
+The constructor validates scan axes and precomputes the Cartesian product in
+`combinations`.
 """
 struct ThompsonGridSpec <: ThompsonSpec
     simulation::SimulationSpec
@@ -54,6 +79,10 @@ end
     CartesianScanner
 
 Alias for `ThompsonGridSpec`.
+
+Use this name when the important detail is the Cartesian grid search over design
+candidates. Use `ThompsonGridSpec` when emphasizing the Thompson sampling stage
+that evaluates the grid under posterior draws.
 """
 const CartesianScanner = ThompsonGridSpec
 

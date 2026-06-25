@@ -4,13 +4,36 @@ using Distributions
     InferenceSpec
 
 Base type for inference specifications.
+
+Concrete subtypes describe how posterior samples should be produced from a
+`Model` and a `SimulationSpec`. Dispatch on this type lets `run_inference`
+select an implementation without changing the model-loading or simulation
+stages.
 """
 abstract type InferenceSpec end
 
 """
-    TuringSpec(; simulation, data, noise_prior, noise_initial, sampler, n_samples, n_chains)
+    TuringSpec(; simulation, data, noise_prior=InverseGamma(2, 3),
+               noise_initial=3.0, sampler=NUTS(0.65), n_samples=3000,
+               n_chains=1, sampling_method=MCMCSerial())
 
 Settings for Bayesian inference with Turing.
+
+This spec represents the inference stage of the workflow. `simulation` defines
+how the model is solved for each proposed parameter draw; `data` contains the
+observations to compare against those solves; and the remaining fields configure
+the observation noise model and Turing sampler.
+
+`data` may be a vector or matrix, but it is flattened internally. Its length
+must match the saved simulation layout:
+
+```julia
+length(t_obs) * observed_state_count(simulation) * number_of_production_solves
+```
+
+Uncertain parameters are discovered from YAML parameters with role
+`:uncertain`. Their priors are read from the YAML `prior` metadata, while
+`noise_prior` controls the observation noise `sigma`.
 """
 struct TuringSpec <: InferenceSpec
     # Shared simulation settings

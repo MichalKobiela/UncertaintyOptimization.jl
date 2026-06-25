@@ -6,7 +6,23 @@ using SciMLStructures: Tunable, replace, Initials, Constants, canonicalize
 """
     Model(model_def, sys)
 
-Simulation wrapper around a `ModelDefinition` and compiled ModelingToolkit system.
+Runtime wrapper around a `ModelDefinition` and compiled ModelingToolkit system.
+
+`ModelDefinition` stores the declarative YAML-derived model. `Model` adds the
+mutable runtime state needed by the later stages: the cached `ODEProblem`,
+warmup and production parameter setters, uncertain-parameter priors and initial
+values, and design-stage setter data.
+
+Create a `Model` after compiling the equations:
+
+```julia
+model_def = load_model("model.yml")
+@mtkcompile sys = System(model_def.equations, t)
+model = Model(model_def, sys)
+```
+
+The same `Model` can then be used for simulation, Turing inference, Thompson
+sampling scans, and evaluation scans.
 """
 
 # -------------------------------------------------------------------------
@@ -64,8 +80,10 @@ end
 """
     get_uncertain_parameters(model::Model) -> Vector{Symbol}
 
-Get the parameter names marked as :uncertain in the model definition
+Get the parameter names marked as `:uncertain` in the model definition.
 
+These are the parameters that become tunable ModelingToolkit parameters and are
+sampled during `TuringSpec` inference.
 """
 function get_uncertain_parameters(model::Model)
     uncertain = Symbol[]
@@ -81,6 +99,11 @@ end
     get_warmup_params(parameters; design=false)
 
 Return parameter warmup values keyed by symbol.
+
+Warmup values are used for the optional first solve that brings the model to a
+starting state before the production solve. With `design=true`, values are read
+from each parameter's nested `design` metadata instead of the ordinary YAML
+warmup field.
 """
 function get_warmup_params(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, Float64}
     # check for a warm up stage, and start with warm up values
@@ -141,6 +164,12 @@ const MultiparamValue = Union{Float64, Tuple{Vararg{Float64}}}
     extract_multiparams(parameters; design=false)
 
 Return scalar or staged parameter values that need production solves.
+
+Tuple-valued parameters define staged production solves. For example, when two
+parameters each provide three values, `simulate!` runs three production solves,
+pairing values positionally after any warmup solve. In design mode, design
+values are included for scanned design parameters while uncertain parameters
+remain controlled by posterior samples.
 """
 function extract_multiparams(parameters::Dict{Symbol, ParameterSpec}; design::Bool=false)::Dict{Symbol, MultiparamValue}
     multiparams = Dict{Symbol, MultiparamValue}()
@@ -272,8 +301,28 @@ end
 """
     simulate!(model, initial_conditions, tspan; kwargs...)
 
-Run the model using YAML/default parameter values plus any supplied overrides.
-Returns production solutions, or `(warmup_sol, sols)` with `return_simulate=true`.
+Run the simulation/build stage for a model.
+
+`simulate!` builds and caches the underlying `ODEProblem` on the first call by
+delegating to `setup_simulation!`. Later calls reuse that problem and the
+precomputed parameter setters, which is why inference and scan stages can call
+it repeatedly inside tight loops.
+
+The simulation uses YAML/default parameter values plus any supplied overrides:
+
+- `parameters`: scalar parameter overrides used when the problem is first built.
+- `solver` and `solver_opts`: solver object and keyword options for `solve`.
+- `saveat` and `save_idxs`: output times and observed state indices.
+- `sampled_uncertain_params`: posterior draw values in model tunable order.
+- `parameter_setter` and `parameter_values`: low-level setter used by grid scans.
+- `design`: use design-stage warmup and multiparameter values.
+- `return_simulate`: return `(warmup_sol, sols)` instead of only production
+  solutions.
+
+The return value is a vector of production solutions. If staged parameters are
+present, the vector contains one solution per stage. With `return_simulate=true`,
+the returned named tuple also includes the warmup solution, or `nothing` if no
+warmup values were configured.
 """
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
@@ -398,6 +447,17 @@ end
     setup_simulation!(model, initial_conditions, tspan; parameters=Dict())
 
 Build and cache the ODE problem plus parameter setters used by `simulate!`.
+
+This function is the explicit build step. It creates the `ODEProblem`, collects
+scalar parameter values from YAML and `parameters`, prepares warmup setters,
+detects staged production parameters, builds design-stage setters, and records
+the tunable uncertain parameters in the compiled system order expected by
+Turing.
+
+Most users can call `simulate!`, `run_inference`, or `run_scan` directly and let
+them call this function as needed. Call it yourself when you want to pay the
+build cost up front or inspect the prepared model fields before running a later
+stage.
 """
 function setup_simulation!(model::Model,
                           initial_conditions::Tuple{Vararg{Float64}},
@@ -488,6 +548,11 @@ end
     make_priors(model) -> Vector
 
 Build priors for tunable uncertain parameters in system order.
+
+The order is the compiled ModelingToolkit tunable-parameter order, not
+necessarily the order in the YAML file. `run_inference` uses the same order for
+posterior draws and then renames sampled chain columns back to parameter
+symbols.
 """
 function make_priors(model::Model)::Vector{Uniform{Float64}}
     ordered_params = ModelingToolkit.parameters(model.sys)
@@ -516,6 +581,15 @@ end
     make_prior(prior) -> Distribution
 
 Build a prior distribution from YAML metadata.
+
+Currently supported metadata:
+
+```yaml
+prior:
+  distribution: uniform
+  lower: 0.0
+  upper: 1.0
+```
 """
 function make_prior(prior::Dict)
     dist = lowercase(prior["distribution"])
@@ -530,6 +604,10 @@ end
     get_initial_tunables(model) -> Tuple
 
 Return initial uncertain parameter values in system tunable order.
+
+These values seed Turing through `make_initial_params`. Each uncertain
+parameter must have a scalar YAML `value`; tuple-valued uncertain parameters are
+not supported for Turing initialisation.
 """
 function get_initial_tunables(model::Model)::Tuple{Vararg{Float64}}
     ordered_params = ModelingToolkit.parameters(model.sys)
