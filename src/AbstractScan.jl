@@ -28,22 +28,22 @@ struct ThompsonGridSpec <: ThompsonSpec
             kind = Symbol(axis.kind)
 
             if isempty(values)
-                error("CartesianSampler.scan values for $symbol must not be empty")
+                error("CartesianScanner.scan values for $symbol must not be empty")
             end
 
             if !all(isfinite, values)
-                error("CartesianSampler.scan values for $symbol must contain finite values")
+                error("CartesianScanner.scan values for $symbol must contain finite values")
             end
 
             if !(kind in (:scale, :value))
-                error("CartesianSampler.scan kind for $symbol must be either :scale or :value. Got :$kind.")
+                error("CartesianScanner.scan kind for $symbol must be either :scale or :value. Got :$kind.")
             end
 
             return (symbol = symbol, values = values, kind = kind)
         end)
 
         if isempty(normalized_scan)
-            error("CartesianSampler.scan must not be empty")
+            error("CartesianScanner.scan must not be empty")
         end
 
         return new(simulation, normalized_scan, _scan_combinations(normalized_scan), loss)
@@ -51,11 +51,18 @@ struct ThompsonGridSpec <: ThompsonSpec
 end
 
 """
-    CartesianSampler
+    CartesianScanner
 
 Alias for `ThompsonGridSpec`.
 """
-const CartesianSampler = ThompsonGridSpec
+const CartesianScanner = ThompsonGridSpec
+
+"""
+    CartesianSampler
+
+Backward-compatible alias for `CartesianScanner`.
+"""
+const CartesianSampler = CartesianScanner
 
 """
     _scan_combinations(scan)

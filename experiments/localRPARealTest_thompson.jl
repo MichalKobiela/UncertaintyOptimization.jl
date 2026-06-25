@@ -61,7 +61,7 @@ end
 
 
 ## thompson sampling 
-thompson_scan = CartesianSampler(
+thompson_scan = CartesianScanner(
     simulation = sim_spec,
     scan = [
         (symbol = :kx2, values = LinRange(0.01, 3, 100), kind = :scale),
@@ -82,41 +82,63 @@ summary_best = DataFrame(
 CSV.write("thompson_samples.csv", summary_best)
 
 
-## evaluate now the kx2 values for each posterior
-candidate_kx2 = sort(unique(summary_best.kx2_scaler))
+## evaluate now the unique kx2 scalers for each posterior
+scaler_counts = combine(
+    groupby(summary_best, :kx2_scaler),
+    nrow => :thompson_count,
+)
+sort!(scaler_counts, :kx2_scaler)
+scaler_counts.thompson_weight = scaler_counts.thompson_count ./ nrow(summary_best)
 
-eval_scan = CartesianSampler(
+candidate_scalers = scaler_counts.kx2_scaler
+
+eval_scan = CartesianScanner(
     simulation = sim_spec,
-    scan = [(symbol = :kx2, values = candidate_kx2, kind = :value)],
+    scan = [(symbol = :kx2, values = candidate_scalers, kind = :scale)],
     loss = loss,
 )
 
 eval_results = run_scan(posterior, eval_scan, model)
 
 evaluation = DataFrame(
-    kx2 = Float64[],
+    kx2_scaler = Float64[],
     median_loss = Float64[],
     q75_loss = Float64[],
     std_loss = Float64[],
+    thompson_count = Int[],
+    thompson_weight = Float64[],
 )
 
-for (i, kx2) in enumerate(candidate_kx2)
-    # extract all the losses across posterior for this kx2 
+for (i, kx2_scaler) in enumerate(candidate_scalers)
+    # extract all the losses across posterior for this kx2 scaler
     losses = [r.losses[i] for r in eval_results]
+    thompson_count = scaler_counts.thompson_count[i]
+    expanded_losses = repeat(losses, thompson_count)
+
     push!(evaluation, (
-        kx2 = kx2,
-        median_loss = median(losses),
-        q75_loss = quantile(losses, 0.75),
-        std_loss = std(losses),
+        kx2_scaler = kx2_scaler,
+        median_loss = median(expanded_losses),
+        q75_loss = quantile(expanded_losses, 0.75),
+        std_loss = std(expanded_losses),
+        thompson_count = thompson_count,
+        thompson_weight = scaler_counts.thompson_weight[i],
     ))
 end
 
+sort!(evaluation, :kx2_scaler)
 CSV.write("evaluation.csv", evaluation)
 
+expanded_indices = Int[]
+for row_index in 1:nrow(evaluation)
+    append!(expanded_indices, fill(row_index, evaluation.thompson_count[row_index]))
+end
+expanded_evaluation = evaluation[expanded_indices, :]
+CSV.write("evaluation_expanded.csv", expanded_evaluation)
 
-med_res = evaluation.median_loss
-quant_res = evaluation.q75_loss
-std_res = evaluation.std_loss
+
+med_res = expanded_evaluation.median_loss
+quant_res = expanded_evaluation.q75_loss
+std_res = expanded_evaluation.std_loss
 
 evaluation_plot = Plots.scatter(
     med_res,
@@ -129,7 +151,7 @@ evaluation_plot = Plots.scatter(
 )
 
 indices = findall((med_res .< 344) .& (quant_res .< 387))
-good_values = evaluation.kx2[indices]
+good_values = expanded_evaluation.kx2_scaler[indices]
 centroid = isempty(good_values) ? missing : mean(good_values)
 
 Plots.scatter!(
@@ -146,5 +168,5 @@ Plots.scatter!(
 CSV.write("indices.csv", DataFrame(index = indices))
 CSV.write("medians.csv", DataFrame(median_loss = med_res))
 CSV.write("quantiles.csv", DataFrame(q75_loss = quant_res))
-CSV.write("good_values.csv", DataFrame(kx2 = good_values))
+CSV.write("good_values.csv", DataFrame(kx2_scaler = good_values))
 Plots.savefig(evaluation_plot, "evaluation_scatter.png")
