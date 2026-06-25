@@ -76,13 +76,12 @@ CSV.write("thompson_samples.csv", thompson_best)
 
 
 ## evaluate the unique kx2 scalers for each posterior
-scaler_counts = combine(
-    groupby(thompson_best, :kx2_scaler),
-    nrow => :thompson_count,
+count_by_scaler = Dict(
+    key.kx2_scaler => nrow(group)
+    for (key, group) in pairs(groupby(thompson_best, :kx2_scaler))
 )
-sort!(scaler_counts, :kx2_scaler)
 
-candidate_scalers = scaler_counts.kx2_scaler
+candidate_scalers = sort!(collect(keys(count_by_scaler)))
 
 eval_scan = CartesianScanner(
     simulation = sim_spec,
@@ -91,7 +90,6 @@ eval_scan = CartesianScanner(
 )
 
 eval_results = run_scan(posterior, eval_scan, model)
-count_by_scaler = Dict(scaler_counts.kx2_scaler .=> scaler_counts.thompson_count)
 
 evaluation = DataFrame(
     kx2_scaler = Float64[],
