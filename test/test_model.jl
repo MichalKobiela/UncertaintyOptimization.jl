@@ -2,6 +2,7 @@ using Test
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t
 using OrdinaryDiffEq
+using DataFrames
 include("helpers/mock_rpa.jl")
 using .MockRPA
 
@@ -304,12 +305,15 @@ end
     @test scan.scan[1].values == [1.0, 2.0]
     @test scan.scan[1].symbol == :k
     @test scan.scan[1].kind == :scale
-    @test length(results) == 1
-    @test results[1].scan == scan.scan
-    @test length(results[1].best_values) == 1
-    @test results[1].best_values[1].symbol == :k
-    @test results[1].best_values[1].kind == :scale
-    @test length(results[1].losses) == 2
+    @test results isa DataFrame
+    @test names(results) == ["iteration", "candidate_index", "k_scaler", "k_value", "loss", "is_best", "best_loss"]
+    @test nrow(results) == 2
+    @test results.iteration == [1, 1]
+    @test results.candidate_index == [1, 2]
+    @test results.k_scaler == [1.0, 2.0]
+    @test results.k_value == [1.0, 2.0]
+    @test count(results.is_best) == 1
+    @test all(results.best_loss .== minimum(results.loss))
     @test loss_calls[] == 2
 
     value_scan = UncertaintyOptimization.CartesianScanner(
@@ -320,7 +324,9 @@ end
     value_results = UncertaintyOptimization.run_scan([Dict(:k => 2.0)], value_scan, model)
 
     @test value_scan.scan[1].kind == :value
-    @test value_results[1].best_values[1].kind == :value
+    @test names(value_results) == ["iteration", "candidate_index", "k_value", "loss", "is_best", "best_loss"]
+    @test value_results.k_value == [2.0]
+    @test only(value_results.is_best)
 
     scaled_params = [2.0]
     value_params = [2.0]
@@ -352,9 +358,18 @@ end
     )
 
     @test combo_scan.combinations == [[1.0, 3.0], [1.0, 4.0], [2.0, 3.0], [2.0, 4.0]]
-    @test length(combo_results[1].losses) == 4
-    @test combo_results[1].best_values[1].value == 1.0
-    @test combo_results[1].best_values[2].value == 3.0
+    @test names(combo_results) == ["iteration", "candidate_index", "k_scaler", "k_value", "k_scaler_2", "k_value_2", "loss", "is_best", "best_loss"]
+    @test nrow(combo_results) == 4
+    @test combo_results.k_scaler == [1.0, 1.0, 2.0, 2.0]
+    @test combo_results.k_value == [1.0, 1.0, 2.0, 2.0]
+    @test combo_results.k_scaler_2 == [3.0, 4.0, 3.0, 4.0]
+    @test combo_results.k_value_2 == [3.0, 4.0, 3.0, 4.0]
+    @test count(combo_results.is_best) == 1
+    @test only(combo_results.k_scaler[combo_results.is_best]) == 1.0
+    @test only(combo_results.k_value[combo_results.is_best]) == 1.0
+    @test only(combo_results.k_scaler_2[combo_results.is_best]) == 3.0
+    @test only(combo_results.k_value_2[combo_results.is_best]) == 3.0
+    @test all(combo_results.best_loss .== minimum(combo_results.loss))
 
     fixed_scan = UncertaintyOptimization.CartesianScanner(
         simulation = sim_spec,
@@ -364,7 +379,9 @@ end
 
     fixed_results = UncertaintyOptimization.run_scan([Dict(:k => 1.0)], fixed_scan, model)
 
-    @test only(fixed_results[1].losses) > 5.0
+    @test names(fixed_results) == ["iteration", "candidate_index", "d_scaler", "d_value", "loss", "is_best", "best_loss"]
+    @test only(fixed_results.d_value) == 6.0
+    @test only(fixed_results.loss) > 5.0
 end
 
 @testset "Test Model simulations" begin

@@ -70,13 +70,15 @@ thompson_scan = CartesianScanner(
 )
 
 thompson_samples = run_scan(posterior, thompson_scan, model)
+thompson_best = thompson_samples[thompson_samples.is_best, :]
+posterior_kx2 = posterior.kx2[thompson_best.iteration]
 
 summary_best = DataFrame(
-    posterior_index = [r.sample_index for r in thompson_samples],
-    posterior_kx2 = [r.sample.kx2 for r in thompson_samples],
-    kx2_scaler = [only(r.best_values).value for r in thompson_samples],
-    best_kx2 = [r.sample.kx2 * only(r.best_values).value for r in thompson_samples],
-    best_loss = [r.best_loss for r in thompson_samples],
+    posterior_index = thompson_best.iteration,
+    posterior_kx2 = posterior_kx2,
+    kx2_scaler = thompson_best.kx2_scaler,
+    best_kx2 = thompson_best.kx2_value,
+    best_loss = thompson_best.best_loss,
 )
 
 CSV.write("thompson_samples.csv", summary_best)
@@ -99,6 +101,8 @@ eval_scan = CartesianScanner(
 )
 
 eval_results = run_scan(posterior, eval_scan, model)
+count_by_scaler = Dict(scaler_counts.kx2_scaler .=> scaler_counts.thompson_count)
+weight_by_scaler = Dict(scaler_counts.kx2_scaler .=> scaler_counts.thompson_weight)
 
 evaluation = DataFrame(
     kx2_scaler = Float64[],
@@ -109,10 +113,11 @@ evaluation = DataFrame(
     thompson_weight = Float64[],
 )
 
-for (i, kx2_scaler) in enumerate(candidate_scalers)
+for eval_group in groupby(eval_results, :kx2_scaler)
     # extract all the losses across posterior for this kx2 scaler
-    losses = [r.losses[i] for r in eval_results]
-    thompson_count = scaler_counts.thompson_count[i]
+    kx2_scaler = first(eval_group.kx2_scaler)
+    losses = eval_group.loss
+    thompson_count = count_by_scaler[kx2_scaler]
     expanded_losses = repeat(losses, thompson_count)
 
     push!(evaluation, (
@@ -121,7 +126,7 @@ for (i, kx2_scaler) in enumerate(candidate_scalers)
         q75_loss = quantile(expanded_losses, 0.75),
         std_loss = std(expanded_losses),
         thompson_count = thompson_count,
-        thompson_weight = scaler_counts.thompson_weight[i],
+        thompson_weight = weight_by_scaler[kx2_scaler],
     ))
 end
 

@@ -1,4 +1,5 @@
 using Tables
+using DataFrames
 
 """
     run_scan(samples, spec::CartesianScanner, model::Model; evaluator = nothing)
@@ -27,7 +28,12 @@ Then the loss is evaluated as:
 This lets a caller provide an evaluator that turns `(posterior_sample, grid_values, spec)`
 into simulation outputs such as `(warmup_sol, predicted_sol)`.
 
-Returns a vector of named tuples with the best scan values and all losses for each sample.
+Returns a `DataFrame` with one row per posterior iteration and scan candidate.
+Scan values are expanded into columns named from each scan axis, for example
+`kx2_scaler` for `(symbol = :kx2, kind = :scale)` and `kx2_value` for
+the resolved parameter value used by the simulation. For `(symbol = :kx2,
+kind = :value)`, only `kx2_value` is emitted because the grid value is already
+the resolved parameter value.
 """
 function run_scan(samples, spec::ThompsonGridSpec, model::Model; evaluator = nothing)
     if isnothing(model.prob)
@@ -35,16 +41,22 @@ function run_scan(samples, spec::ThompsonGridSpec, model::Model; evaluator = not
     end
 
     scan_plan = _scan_plan(model, spec)
+    scan_column_names = _scan_column_names(spec)
     posterior_samples = _scan_rows(samples)
-    results = NamedTuple[]
+    rows = NamedTuple[]
 
-    for (sample_index, one_posterior) in enumerate(posterior_samples)
+    for (iteration, one_posterior) in enumerate(posterior_samples)
+        sampled_uncertain_params = if isnothing(evaluator) || _scan_output_needs_sampled_uncertain_params(spec, scan_plan)
+            _sampled_uncertain_params(model, one_posterior)
+        else
+            nothing
+        end
         losses = Vector{Float64}(undef, length(spec.combinations))
 
-        for (grid_index, grid_values) in pairs(spec.combinations)
+        for (candidate_index, grid_values) in pairs(spec.combinations)
 
             evaluated = if isnothing(evaluator)
-                _default_grid_scan_evaluator(one_posterior, grid_values, spec, model, scan_plan)
+                _default_grid_scan_evaluator(grid_values, spec, model, scan_plan, sampled_uncertain_params)
             else
                 evaluator(one_posterior, grid_values, spec)
             end
@@ -55,21 +67,83 @@ function run_scan(samples, spec::ThompsonGridSpec, model::Model; evaluator = not
                 error("CartesianScanner.loss must return a real scalar. Got $(typeof(loss_value)).")
             end
 
-            losses[grid_index] = Float64(loss_value)
+            losses[candidate_index] = Float64(loss_value)
         end
 
         best_index = argmin(losses)
-        push!(results, (
-            sample_index = sample_index,
-            sample = one_posterior,
-            scan = spec.scan,
-            best_values = _scan_assignment(spec, spec.combinations[best_index]),
-            best_loss = losses[best_index],
-            losses = losses,
-        ))
+        best_loss = losses[best_index]
+
+        for (candidate_index, grid_values) in pairs(spec.combinations)
+            push!(rows, (
+                iteration = iteration,
+                candidate_index = candidate_index,
+                _scan_values(scan_column_names, spec, grid_values, scan_plan, sampled_uncertain_params)...,
+                loss = losses[candidate_index],
+                is_best = candidate_index == best_index,
+                best_loss = best_loss,
+            ))
+        end
     end
 
-    return results
+    return DataFrame(rows)
+end
+
+function _scan_column_names(spec::ThompsonGridSpec)
+    column_names = Symbol[]
+    counts = Dict{Symbol, Int}()
+
+    for axis in spec.scan
+        push!(column_names, _unique_scan_column_name!(counts, _scan_grid_column_name(axis)))
+
+        if axis.kind === :scale
+            push!(column_names, _unique_scan_column_name!(counts, _scan_value_column_name(axis)))
+        end
+    end
+
+    return column_names
+end
+
+function _unique_scan_column_name!(counts, base_name::Symbol)
+    count = get(counts, base_name, 0) + 1
+    counts[base_name] = count
+
+    return count == 1 ? base_name : Symbol(base_name, "_", count)
+end
+
+function _scan_grid_column_name(axis)
+    suffix = axis.kind === :scale ? "scaler" : "value"
+    return Symbol(axis.symbol, "_", suffix)
+end
+
+function _scan_value_column_name(axis)
+    return Symbol(axis.symbol, "_value")
+end
+
+function _scan_values(column_names, spec::ThompsonGridSpec, grid_values, scan_plan, sampled_uncertain_params)
+    values = Float64[]
+
+    for i in eachindex(spec.scan)
+        axis = spec.scan[i]
+        push!(values, grid_values[i])
+
+        if axis.kind === :scale
+            base_value = _scan_axis_base_value(sampled_uncertain_params, scan_plan, i)
+            push!(values, _grid_parameter_value(base_value, grid_values[i], axis.kind))
+        end
+    end
+
+    return NamedTuple{Tuple(column_names)}(Tuple(values))
+end
+
+function _scan_output_needs_sampled_uncertain_params(spec::ThompsonGridSpec, scan_plan)
+    return any(eachindex(spec.scan)) do i
+        spec.scan[i].kind === :scale && !isnothing(scan_plan.tunable_indices[i])
+    end
+end
+
+function _scan_axis_base_value(sampled_uncertain_params, scan_plan, axis_index)
+    tunable_index = scan_plan.tunable_indices[axis_index]
+    return isnothing(tunable_index) ? scan_plan.fixed_values[axis_index] : sampled_uncertain_params[tunable_index]
 end
 
 function _scan_rows(samples)
@@ -103,10 +177,10 @@ function _unsupported_sys_keyword(err, loss)
     return err.args[2] === loss && kws isa NamedTuple && haskey(kws, :sys)
 end
 
-function _default_grid_scan_evaluator(one_posterior, grid_values, spec::ThompsonGridSpec, model::Model, scan_plan)
+function _default_grid_scan_evaluator(grid_values, spec::ThompsonGridSpec, model::Model, scan_plan, sampled_uncertain_params)
     simulation = spec.simulation
 
-    sampled_uncertain_params = _sampled_uncertain_params(model, one_posterior)
+    sampled_uncertain_params = copy(sampled_uncertain_params)
     parameter_values = _scan_parameter_values(sampled_uncertain_params, spec, grid_values, scan_plan)
 
     sim = simulate!(
@@ -197,7 +271,7 @@ function _scan_parameter_values(sampled_uncertain_params, spec::ThompsonGridSpec
     @inbounds for i in eachindex(spec.scan)
         axis = spec.scan[i]
         tunable_index = scan_plan.tunable_indices[i]
-        base_value = isnothing(tunable_index) ? scan_plan.fixed_values[i] : sampled_uncertain_params[tunable_index]
+        base_value = _scan_axis_base_value(sampled_uncertain_params, scan_plan, i)
         parameter_values[i] = _grid_parameter_value(base_value, grid_values[i], axis.kind)
     end
 
@@ -226,11 +300,4 @@ function _grid_parameter_value(base_value, grid_value, kind::Symbol)
     else
         error("CartesianScanner.kind must be either :scale or :value. Got :$kind.")
     end
-end
-
-function _scan_assignment(spec::ThompsonGridSpec, grid_values)
-    return [
-        (symbol = spec.scan[i].symbol, value = grid_values[i], kind = spec.scan[i].kind)
-        for i in eachindex(spec.scan)
-    ]
 end
