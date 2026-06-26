@@ -18,7 +18,9 @@ that expensive ModelingToolkit and SciML setup is paid once and then reused.
 ## YAML Model Definition
 
 The YAML file describes the symbolic model, not the full experiment execution.
-`load_model` reads this file and returns a `ModelDefinition`.
+`load_model` reads this file and returns a `ModelDefinition`. See
+[YAML Model Files](@ref) for a complete minimal file and details about
+parameter roles, warmup values, and staged parameters.
 
 Required model sections are:
 

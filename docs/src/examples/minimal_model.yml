@@ -1,0 +1,43 @@
+experiment:
+  name: "MinimalDoseResponse"
+  description: "One-state example showing fixed, uncertain, design, warmup, and staged parameters."
+
+model:
+  type: "ODE"
+  states: ["X"]
+
+equations:
+  X: "drive * dose * input - decay * X + baseline"
+
+parameters:
+  drive:
+    value: 1.0
+    role: design
+    bounds: [0.1, 5.0]
+    design:
+      warmup_value: 0.5
+      value: 1.5
+    design_optimise:
+      scalers: "0.5:0.25:2.0"
+
+  decay:
+    value: 0.25
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.05
+      upper: 1.0
+
+  dose:
+    warmup_value: 0.0
+    value: [0.5, 1.0, 2.0]
+    role: fixed
+
+  baseline:
+    value: 0.1
+    role: fixed
+
+inputs:
+  type: "step"
+  t_threshold: 5.0
+  values: [0.0, 1.0]

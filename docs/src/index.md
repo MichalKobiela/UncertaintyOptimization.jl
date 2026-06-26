@@ -16,8 +16,8 @@ The package workflow is organised around a small set of stages:
 - scan design candidates with `CartesianScanner` and `run_scan`;
 - evaluate selected candidates by reusing the same scan machinery.
 
-See [Workflow](@ref) for the stage-by-stage guide and [Reference](@ref) for
-generated API documentation.
+See [YAML Model Files](@ref) for model-file structure, [Workflow](@ref) for the
+stage-by-stage guide, and [Reference](@ref) for generated API documentation.
 
 ## Install
 

@@ -14,6 +14,7 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "YAML Models" => "yaml.md",
         "Workflow" => "workflow.md",
         "Reference" => "reference.md"
     ],
