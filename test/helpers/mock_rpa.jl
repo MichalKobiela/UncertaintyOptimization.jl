@@ -40,14 +40,14 @@ function mock_rpa_model()
 
     # input step function (symbolic)
     input_expr = ifelse(t < 50, 1.0, 10.0)
+    hill_eps = 1e-12
+    hill_repression(x, k, n) = 1 / (1 + exp(n * (log(x + hill_eps) - log(k + hill_eps))))
 
-    # A: alpha_1*(1/(1+(K_TF/(1+(input/K_IR)))^n_RA) + beta_RA)*(1/((K_BA/B)^n_BA + 1) + beta_BA) - gamma_A*A
-    rhs_A = alpha_1 * ( 1/(1 + (K_TF/(1 + (input_expr/K_IR)))^n_RA) + beta_RA ) *
-                  ( 1/((K_BA / B)^n_BA + 1) + beta_BA ) - gamma_A * A
+    rhs_A = alpha_1 * (hill_repression(K_TF, 1 + input_expr / K_IR, n_RA) + beta_RA) *
+                  (hill_repression(K_BA, B, n_BA) + beta_BA) - gamma_A * A
 
-    # B: alpha_2*(1/(1+(A/K_AB)^n_AB) + beta_AB)*(1/((K_BB/B)^n_BB + 1) + beta_BB) - gamma_B*B
-    rhs_B = alpha_2 * ( 1/(1 + (A / K_AB)^n_AB) + beta_AB ) *
-                  ( 1/((K_BB / B)^n_BB + 1) + beta_BB ) - gamma_B * B
+    rhs_B = alpha_2 * (hill_repression(A, K_AB, n_AB) + beta_AB) *
+                  (hill_repression(K_BB, B, n_BB) + beta_BB) - gamma_B * B
 
     eqs = [
         Differential(t)(A) ~ rhs_A,

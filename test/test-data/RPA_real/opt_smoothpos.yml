@@ -8,13 +8,13 @@ model:
 
 equations:
   A: |
-    0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
+    0.02 * (alpha_1 / (1 + exp(nx1 * (log(kcymRtot + 1e-12) - log(1 + cuma / kx1 + 1e-12)))) + beta_1) *
+          (alpha_2 / (1 + exp(nx2 * (log(kx2 + 1e-12) - log(((B + sqrt(B^2 + 1e-12)) / 2) + 1e-12)))) + beta_2) -
           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
 
   B: |
-    0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-          (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
+    0.02 * (alpha_3 / (1 + exp(nx2 * (log(kx3 + 1e-12) - log(((B + sqrt(B^2 + 1e-12)) / 2) + 1e-12)))) + beta_3) *
+          (alpha_4 / (1 + exp(nr * (log(((A + sqrt(A^2 + 1e-12)) / 2) + 1e-12) - log(kr + 1e-12)))) + beta_4) -
           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2)
 
 simulation:
@@ -171,4 +171,3 @@ inputs:
     type: "step"
     t_threshold: 50
     values: [1, 10]
-   

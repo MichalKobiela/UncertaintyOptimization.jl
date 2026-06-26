@@ -8,13 +8,13 @@ model:
 
 equations:
   A: |
-    0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-          (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
+    0.02 * (alpha_1 / (1 + exp(nx1 * (log(kcymRtot + 1e-12) - log(1 + cuma / kx1 + 1e-12)))) + beta_1) *
+          (alpha_2 / (1 + exp(nx2 * (log(kx2 + 1e-12) - log(max(B, 0) + 1e-12)))) + beta_2) -
           0.02 * r1 * max(A, 0)
 
   B: |
-    0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3) *
-          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
+    0.02 * (alpha_3 / (1 + exp(nx2 * (log(kx3 + 1e-12) - log(max(B, 0) + 1e-12)))) + beta_3) *
+          (alpha_4 / (1 + exp(nr * (log(max(A, 0) + 1e-12) - log(kr + 1e-12)))) + beta_4) -
           0.1 * r2 * max(B, 0)
 
 simulation:
@@ -171,4 +171,3 @@ inputs:
     type: "step"
     t_threshold: 50
     values: [1, 10]
-   
