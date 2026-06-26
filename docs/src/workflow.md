@@ -73,6 +73,18 @@ simulation = SimulationSpec(
 sols = simulate!(model, simulation)
 ```
 
+When warmup and production need different time spans, pass a pair of intervals:
+
+```julia
+simulation = SimulationSpec(
+    t_obs = collect(range(0.0, 5.45, length = 30)),
+    obs_state = :A,
+    initial_conditions = (1.0, 1.0),
+    tspan = ((0.0, 10.0), (0.0, 5.45)),
+    solver = Rosenbrock23(),
+)
+```
+
 Warmup values and tuple-valued staged parameters are taken from the YAML
 parameter metadata. With `return_simulate = true`, `simulate!` returns both the
 optional warmup solution and the production solutions.

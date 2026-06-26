@@ -192,6 +192,15 @@ end
         initial_conditions = (1.0, 1.0),
         tspan = (0.0, 1.0),
     )
+    staged_tspan_spec = UncertaintyOptimization.SimulationSpec(
+        t_obs = [0.0, 0.5],
+        obs_state = :A,
+        initial_conditions = (1.0, 1.0),
+        tspan = ((0.0, 10.0), (0.0, 0.5)),
+    )
+
+    @test sim_spec.tspan == ((0.0, 1.0), (0.0, 1.0))
+    @test staged_tspan_spec.tspan == ((0.0, 10.0), (0.0, 0.5))
 
     expected_indices = [
         findfirst(isequal(getproperty(observed_state_sys, state)), unknowns(observed_state_sys))
@@ -614,6 +623,20 @@ end
 
         @test length(sols) == 3
         @test [Array(sol)[end] for sol in sols] ≈ [1.0, 2.0, 3.0]
+
+        staged_tspan_sim = simulate!(
+            model,
+            (0.0,),
+            ((0.0, 1.0), (0.0, 0.5));
+            solver=Euler(),
+            solver_opts=(dt=0.1,),
+            saveat=[0.5],
+            return_simulate=true,
+        )
+
+        @test staged_tspan_sim.warmup_sol.t[end] == 1.0
+        @test all(sol.t[end] == 0.5 for sol in staged_tspan_sim.sols)
+        @test [Array(sol)[end] for sol in staged_tspan_sim.sols] ≈ [0.5, 1.0, 1.5]
     end
     
 end

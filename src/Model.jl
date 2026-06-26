@@ -160,6 +160,39 @@ end
 
 const MultiparamValue = Union{Float64, Tuple{Vararg{Float64}}}
 
+function _is_single_tspan(tspan)
+    return tspan isa Tuple && length(tspan) == 2 && tspan[1] isa Number && tspan[2] isa Number
+end
+
+function _normalize_single_tspan(tspan, label)
+    if !_is_single_tspan(tspan)
+        error("$label must be a tuple `(start, stop)` with numeric entries.")
+    end
+
+    normalized = (Float64(tspan[1]), Float64(tspan[2]))
+    if normalized[1] >= normalized[2]
+        error("$label must be ordered as (start, stop) with start < stop")
+    end
+
+    return normalized
+end
+
+function _normalize_simulation_tspan(tspan)
+    if _is_single_tspan(tspan)
+        normalized = _normalize_single_tspan(tspan, "tspan")
+        return (normalized, normalized)
+    end
+
+    if tspan isa Tuple && length(tspan) == 2 && _is_single_tspan(tspan[1]) && _is_single_tspan(tspan[2])
+        return (
+            _normalize_single_tspan(tspan[1], "warmup tspan"),
+            _normalize_single_tspan(tspan[2], "production tspan"),
+        )
+    end
+
+    error("tspan must be `(start, stop)` or `((warmup_start, warmup_stop), (production_start, production_stop))`.")
+end
+
 """
     extract_multiparams(parameters; design=false)
 
@@ -314,6 +347,11 @@ time span, solver, observation times, observed states, solver options, and
 uncertain parameter values. Extra keyword arguments override values from the
 spec and are forwarded to the lower-level method.
 
+`tspan` can be either a single `(start, stop)` interval or a pair of intervals:
+`((warmup_start, warmup_stop), (production_start, production_stop))`. A single
+interval is used for both warmup and production. A pair lets the warmup solve run
+longer than the production solves.
+
 The simulation uses YAML/default parameter values plus any supplied overrides:
 
 - `parameters`: scalar parameter overrides used when the problem is first built.
@@ -332,7 +370,7 @@ warmup values were configured.
 """
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
-                   tspan::Tuple{Float64, Float64}
+                   tspan
                    ;
                    parameters::Dict=Dict{Symbol,Float64}(),
                    solver = Rosenbrock23(),
@@ -348,18 +386,20 @@ function simulate!(model::Model,
                    return_simulate::Bool = false,
                    design::Bool = false,
                    )
+    warmup_tspan, production_tspan = _normalize_simulation_tspan(tspan)
 
     # build the problem once
     if isnothing(model.prob)
         @debug "Setting up simulation"
         setup_simulation!(model, 
                         initial_conditions, 
-                        tspan;
+                        (warmup_tspan, production_tspan);
                         parameters
                         )
     end
 
-    prob = model.prob
+    prob = model.prob.tspan == warmup_tspan ? model.prob : remake(model.prob; tspan=warmup_tspan)
+    prod_prob = prob.tspan == production_tspan ? prob : remake(prob; tspan=production_tspan)
     warmup_values = design ? model.design_warmup_values : model.warmup_values
     warmup_setter! = design ? model.design_warmup_setter! : model.warmup_setter!
     stage_multiparam_values = design ? model.design_multiparam_values : model.multiparam_values
@@ -420,7 +460,7 @@ function simulate!(model::Model,
         Base.Threads.@threads for i in 1:multiparam_length
             p_i = replace(Constants(), p_work, collect(base_constants))
             stage_multiparam_setter!(p_i, stage_multiparam_values[i])
-            prob_i = remake(prob; p=p_i)
+            prob_i = remake(prod_prob; p=p_i)
             sol = solve(prob_i, solver; opts_prod...)
             prealloc_results_vector[i] = sol
         end
@@ -435,7 +475,7 @@ function simulate!(model::Model,
                 parameter_setter(p_work, parameter_values)
             end
 
-            sol = solve(prob, solver; p=p_work, opts_prod...)
+            sol = solve(prod_prob, solver; p=p_work, opts_prod...)
 
             prealloc_results_vector[i] = sol
         end
@@ -467,9 +507,10 @@ stage.
 """
 function setup_simulation!(model::Model,
                           initial_conditions::Tuple{Vararg{Float64}},
-                          tspan::Tuple{Float64, Float64};
+                          tspan;
                           parameters::Dict=Dict{Symbol,Float64}(),
                           )
+    warmup_tspan, _ = _normalize_simulation_tspan(tspan)
     
     # Get states from the compiled system
     # FIXME - Initial conditions should be named tuples (do not rely on indices)
@@ -514,7 +555,7 @@ function setup_simulation!(model::Model,
     )
 
     # Create the problem with all parameters and their starting values
-    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), tspan, jac=true)
+    model.prob = ODEProblem(model.sys, merge(u0,p_map_vars), warmup_tspan, jac=true)
 
     ## warmup
     warmup_values, warmup_Nums = get_warmup_setter_inputs(model)

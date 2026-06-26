@@ -28,7 +28,7 @@ model = Model(RPA_model, sys)
 
 # Define simulation parameters
 init_cond = (24.0, 350.0) # Initial values for y1 and y2
-tspan = (0.0, 10.0)
+tspan = ((0.0, 10.0), (0.0, 5.45))
         
 # Run simulation
 sols = simulate!(model, init_cond, tspan)
@@ -52,7 +52,7 @@ sim_spec = SimulationSpec(
     t_obs = time,
     obs_state = :A,
     initial_conditions = (24.0, 350.0),
-    tspan = (0.0, 10.0),
+    tspan = tspan,
     solver = AutoTsit5(Rosenbrock23(autodiff=false)),
     solver_opts = (dtmin = 1e-9,),
 )
@@ -71,6 +71,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a9_parallel_modelData.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a10_parallel_doubleTspan_hill.jls"), "w") do f
     serialize(f, chain)
 end

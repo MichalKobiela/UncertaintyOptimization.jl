@@ -6,8 +6,8 @@
 Shared settings for the simulation/build stage.
 
 `SimulationSpec` captures the parts of a run that are not part of the YAML model
-definition: observation times, observed state or states, initial conditions, the
-time span, solver, and solver keyword options. The same spec can be reused by
+definition: observation times, observed state or states, initial conditions, time
+spans, solver, and solver keyword options. The same spec can be reused by
 `TuringSpec` for inference and by `ThompsonGridSpec`/`CartesianScanner` for
 Thompson-style scans and later evaluation.
 
@@ -16,7 +16,10 @@ Fields:
 - `t_obs`: time points saved for observations and loss evaluation.
 - `obs_state`: one state name or a collection of state names to observe.
 - `initial_conditions`: initial values in the compiled system's unknown order.
-- `tspan`: `(start, stop)` integration interval.
+- `tspan`: integration intervals. A single `(start, stop)` is normalized to
+  `((start, stop), (start, stop))`. Use `((warmup_start, warmup_stop),
+  (production_start, production_stop))` when warmup and production solves should
+  use different intervals.
 - `uncertain_param_values`: optional values for uncertain parameters.
 - `solver`: OrdinaryDiffEq-compatible solver object.
 - `solver_opts`: keyword options passed through to `solve`.
@@ -25,7 +28,7 @@ struct SimulationSpec
     t_obs::Vector{Float64}
     obs_state::Union{Symbol, Vector{Symbol}}
     initial_conditions::Tuple{Vararg{Number}}
-    tspan::Tuple{Float64, Float64}
+    tspan::Tuple{Tuple{Float64, Float64}, Tuple{Float64, Float64}}
     uncertain_param_values::Dict
     solver::Any
     solver_opts::NamedTuple
@@ -34,7 +37,7 @@ struct SimulationSpec
         t_obs::AbstractVector{<:Number},
         obs_state,
         initial_conditions::Tuple{Vararg{Number}},
-        tspan::Tuple{<:Number, <:Number},
+        tspan,
         uncertain_param_values::Dict = Dict(),
         solver = Euler(),
         solver_opts::NamedTuple = NamedTuple(),
@@ -49,15 +52,13 @@ struct SimulationSpec
             error("initial_conditions must not be empty")
         end
 
-        if tspan[1] >= tspan[2]
-            error("tspan must be ordered as (start, stop) with start < stop")
-        end
+        normalized_tspan = _normalize_simulation_tspan(tspan)
 
         return new(
             Float64.(collect(t_obs)),
             length(states) == 1 ? only(states) : collect(states),
             initial_conditions,
-            (Float64(tspan[1]), Float64(tspan[2])),
+            normalized_tspan,
             uncertain_param_values,
             solver,
             solver_opts,
