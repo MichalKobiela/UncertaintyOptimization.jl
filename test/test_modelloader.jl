@@ -63,16 +63,10 @@ end
                     "lower" => 0.0,
                     "upper" => 1e4,
                 ),
-                "design_optimise" => Dict(
-                    "scalers" => [1, 2, 3, 4],
-                ),
             ),
             "kx3" => Dict(
                 "role" => "fixed",
                 "value" => 4006.9,
-                "design_optimise" => Dict(
-                    "scalers" => "0.1:0.03:0.16",
-                ),
             ),
             "cuma" => Dict(
                 "role" => "fixed",
@@ -101,7 +95,6 @@ end
     end
 
     @test isnothing(symbolics.parameters[:k1].design)
-    @test isnothing(symbolics.parameters[:k1].design_optimise)
     @test symbolics.parameters[:cuma].design isa UncertaintyOptimization.Design
     @test symbolics.parameters[:cuma].design.warmup_value == 2e-6
     @test symbolics.parameters[:cuma].design.value == 0.0003
@@ -111,13 +104,31 @@ end
     @test symbolics.parameters[:k5].design.value == 0.6
     @test UncertaintyOptimization.get_warmup_params(symbolics.parameters) == Dict(:cuma => 2e-6)
     @test UncertaintyOptimization.get_warmup_params(symbolics.parameters; design=true) == Dict(:cuma => 2e-6)
-    @test symbolics.parameters[:kx2].design_optimise == (1.0, 2.0, 3.0, 4.0)
-    @test symbolics.parameters[:kx3].design_optimise == (0.1, 0.13, 0.16)
 
     for (s_sym, var_obj) in symbolics.states
         @test typeof(var_obj) <: SymbolicUtils.BasicSymbolic
     end
 
+end
+
+@testset "Deprecated design_optimise YAML" begin
+    config = Dict(
+        "parameters" => Dict(
+            "k" => Dict(
+                "role" => "design",
+                "value" => 1.0,
+                "design_optimise" => Dict("scalers" => "0.5:0.25:2.0"),
+            ),
+        ),
+        "model" => Dict("states" => ["X"]),
+        "inputs" => Dict(
+            "type" => "step",
+            "t_threshold" => 5.0,
+            "values" => [0.0, 1.0],
+        ),
+    )
+
+    @test_throws ErrorException UncertaintyOptimization.build_symbolics(config)
 end
 
  

@@ -56,7 +56,7 @@ function mock_rpa_model()
 
     # Build ParameterSpec dict reflecting YAML (role, values, bounds, prior dict)
     params = Dict{Symbol, ParameterSpec}()
-    parameter_spec(args...) = ParameterSpec(args..., nothing, nothing)
+    parameter_spec(args...) = ParameterSpec(args..., nothing)
 
     # design params
     params[:alpha_1] = parameter_spec("alpha_1", alpha_1, :design, 100.0, nothing, (10.0,200.0), nothing)

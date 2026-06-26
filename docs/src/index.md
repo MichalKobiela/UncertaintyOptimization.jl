@@ -22,5 +22,5 @@ stage-by-stage guide, and [Reference](@ref) for generated API documentation.
 ## Install
 
 ```julia-repl
-pkg> add https://github.com/MichalKobiela/UncertaintyOptimization.jl
+pkg> add https://github.com/MichalKobiela/UncertaintyOptimization.jl#v1.0.0
 ```

@@ -32,8 +32,6 @@ parameters:
     design:
       warmup_value: 0.5
       value: 1.5
-    design_optimise:
-      scalers: "0.5:0.25:2.0"
 
   decay:
     value: 0.25
@@ -101,9 +99,9 @@ during inference. In the example, `baseline` is scalar and `dose` is staged.
 sampled from a uniform prior.
 
 `design` parameters are candidates for design-stage scans. They can have a
-normal `value`, optional `bounds`, optional nested `design` values, and optional
-`design_optimise` metadata. In the example, `drive` is a design parameter that
-can be changed during Thompson sampling or evaluation.
+normal `value`, optional `bounds`, and optional nested `design` values. In the
+example, `drive` is a design parameter that can be changed during Thompson
+sampling or evaluation.
 
 ## Parameter Fields
 
@@ -132,16 +130,19 @@ scanner receives its concrete grid through `CartesianScanner`.
 `design = true`. `design.warmup_value` is used during the design warmup solve,
 and `design.value` is used for design-stage production solves.
 
-`design_optimise.scalers` can store candidate scale factors in YAML. It accepts
-either an explicit vector or `start:step:stop` notation:
+Scan candidate ranges are not stored in YAML. Put them in the `values` field of
+`CartesianScanner(scan = [...])` so the model definition stays separate from the
+design experiment:
 
-```yaml
-design_optimise:
-  scalers: "0.5:0.25:2.0"
+```julia
+scan = CartesianScanner(
+    simulation = simulation,
+    scan = [
+        (symbol = :drive, values = 0.5:0.25:2.0, kind = :scale),
+    ],
+    loss = loss,
+)
 ```
-
-The scanner still receives its `scan = [...]` values in Julia. Use this YAML
-metadata when you want to build that scan grid from the model definition.
 
 ## Warmup Solves
 

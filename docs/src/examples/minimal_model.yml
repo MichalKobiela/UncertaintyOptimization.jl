@@ -17,8 +17,6 @@ parameters:
     design:
       warmup_value: 0.5
       value: 1.5
-    design_optimise:
-      scalers: "0.5:0.25:2.0"
 
   decay:
     value: 0.25

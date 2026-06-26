@@ -25,7 +25,6 @@ using .MockRPA
             nothing,
             nothing,
             UncertaintyOptimization.Design(nothing, 3.0),
-            nothing,
         ),
         :d => UncertaintyOptimization.ParameterSpec(
             "d",
@@ -36,7 +35,6 @@ using .MockRPA
             nothing,
             nothing,
             UncertaintyOptimization.Design(5.0, 6.0),
-            nothing,
         ),
     )
 
@@ -83,14 +81,12 @@ end
             nothing,
             nothing,
             UncertaintyOptimization.Design(2e-6, 0.0003),
-            nothing,
         ),
         :fallback => UncertaintyOptimization.ParameterSpec(
             "fallback",
             fallback,
             :fixed,
             (10.0, 20.0, 30.0),
-            nothing,
             nothing,
             nothing,
             nothing,
@@ -105,7 +101,6 @@ end
             nothing,
             nothing,
             nothing,
-            nothing,
         ),
         :sampled => UncertaintyOptimization.ParameterSpec(
             "sampled",
@@ -115,7 +110,6 @@ end
             nothing,
             nothing,
             Dict("distribution" => "uniform", "lower" => 0.0, "upper" => 10.0),
-            nothing,
             nothing,
         ),
     )
@@ -173,7 +167,6 @@ end
             k,
             :fixed,
             1.0,
-            nothing,
             nothing,
             nothing,
             nothing,
@@ -241,14 +234,12 @@ end
             nothing,
             Dict("distribution" => "uniform", "lower" => 0.0, "upper" => 10.0),
             nothing,
-            nothing,
         ),
         :d => UncertaintyOptimization.ParameterSpec(
             "d",
             d,
             :fixed,
             3.0,
-            nothing,
             nothing,
             nothing,
             nothing,
@@ -574,7 +565,6 @@ end
                 :fixed,
                 (1.0, 2.0, 3.0),
                 0.0,
-                nothing,
                 nothing,
                 nothing,
                 nothing,
