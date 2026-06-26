@@ -70,15 +70,7 @@ simulation = SimulationSpec(
     solver_opts = (dtmin = 1e-9,),
 )
 
-sols = simulate!(
-    model,
-    simulation.initial_conditions,
-    simulation.tspan;
-    solver = simulation.solver,
-    saveat = simulation.t_obs,
-    save_idxs = UncertaintyOptimization.observed_state_save_idxs(model.sys, simulation),
-    solver_opts = simulation.solver_opts,
-)
+sols = simulate!(model, simulation)
 ```
 
 Warmup values and tuple-valued staged parameters are taken from the YAML

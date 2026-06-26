@@ -276,6 +276,25 @@ end
         solver = Tsit5(),
     )
 
+    manual_sim_model = UncertaintyOptimization.Model(model_def, grid_scan_sys)
+    spec_sim_model = UncertaintyOptimization.Model(model_def, grid_scan_sys)
+    override_sim_model = UncertaintyOptimization.Model(model_def, grid_scan_sys)
+
+    manual_sols = simulate!(
+        manual_sim_model,
+        sim_spec.initial_conditions,
+        sim_spec.tspan;
+        solver=sim_spec.solver,
+        saveat=sim_spec.t_obs,
+        save_idxs=UncertaintyOptimization.observed_state_save_idxs(manual_sim_model.sys, sim_spec),
+        solver_opts=sim_spec.solver_opts,
+    )
+    spec_sols = simulate!(spec_sim_model, sim_spec)
+    override_sols = simulate!(override_sim_model, sim_spec; saveat=[0.5])
+
+    @test Array(only(spec_sols)) ≈ Array(only(manual_sols))
+    @test size(Array(only(override_sols)), 2) == 1
+
     loss_calls = Ref(0)
     loss = function(warmup_sol, predicted_sol; sys=nothing)
         loss_calls[] += 1

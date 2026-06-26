@@ -165,8 +165,7 @@ To inspect the warmup solution, call:
 ```julia
 sim = simulate!(
     model,
-    simulation.initial_conditions,
-    simulation.tspan;
+    simulation;
     return_simulate = true,
 )
 

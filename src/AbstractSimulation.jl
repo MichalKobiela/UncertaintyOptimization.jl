@@ -180,3 +180,21 @@ function observed_state_save_idxs(sys, simulation::SimulationSpec)
     indices = observed_state_indices(sys, simulation)
     return length(indices) == 1 ? only(indices) : indices
 end
+
+function simulate!(model::Model, simulation::SimulationSpec; kwargs...)
+    spec_kwargs = (
+        parameters=simulation.uncertain_param_values,
+        solver=simulation.solver,
+        saveat=simulation.t_obs,
+        save_idxs=observed_state_save_idxs(model.sys, simulation),
+        solver_opts=simulation.solver_opts,
+    )
+    call_kwargs = merge(spec_kwargs, (; kwargs...))
+
+    return simulate!(
+        model,
+        simulation.initial_conditions,
+        simulation.tspan;
+        call_kwargs...,
+    )
+end

@@ -299,6 +299,7 @@ end
 
 
 """
+    simulate!(model, simulation; kwargs...)
     simulate!(model, initial_conditions, tspan; kwargs...)
 
 Run the simulation/build stage for a model.
@@ -307,6 +308,11 @@ Run the simulation/build stage for a model.
 delegating to `setup_simulation!`. Later calls reuse that problem and the
 precomputed parameter setters, which is why inference and scan stages can call
 it repeatedly inside tight loops.
+
+When passed a `SimulationSpec`, `simulate!` uses the spec's initial conditions,
+time span, solver, observation times, observed states, solver options, and
+uncertain parameter values. Extra keyword arguments override values from the
+spec and are forwarded to the lower-level method.
 
 The simulation uses YAML/default parameter values plus any supplied overrides:
 
