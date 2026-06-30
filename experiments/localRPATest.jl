@@ -98,8 +98,8 @@ spec = TuringSpec(
 @time chain = run_inference(model, spec)
 
 betas = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
-posterior_samples = sample(chain[betas], sampling_size; replace=false)
-samples = Array(posterior_samples)
+chain_df = DataFrame(chain[betas])[:, betas]
+posterior_samples = chain_df[sample(1:nrow(chain_df), sampling_size; replace=false), :]
 
 
 # Test if posterior draws distribution recovers the ground truth values
@@ -118,4 +118,4 @@ for row in rows
     println("Result: $(row)")
 end
 
-CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=true)
+CSV.write("RPA_posterior_samples.csv", posterior_samples)
