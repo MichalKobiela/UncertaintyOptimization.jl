@@ -21,7 +21,7 @@ using Random
                 "k",
                 k,
                 :uncertain,
-                1.0,
+                0.0,
                 nothing,
                 nothing,
                 Dict("distribution" => "uniform", "lower" => 0.0, "upper" => 2.0),
@@ -47,6 +47,7 @@ using Random
             obs_state = :X,
             initial_conditions = (0.0,),
             tspan = (0.0, 1.0),
+            uncertain_param_values = Dict(:k => 1.0),
             solver = Euler(),
             solver_opts = (dt = 0.05,),
         )

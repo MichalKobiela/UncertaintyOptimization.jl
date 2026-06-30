@@ -81,23 +81,79 @@ end
 
 Build Turing initial parameters from model tunable defaults.
 
-The initial uncertain-parameter values come from YAML and are ordered to match
-the compiled system's tunable parameters. The observation noise starts at
-`spec.noise_initial`.
+Initial uncertain-parameter values are ordered to match the compiled system's
+tunable parameters. Values supplied in
+`spec.simulation.uncertain_param_values` take precedence over YAML defaults.
+The observation noise starts at `spec.noise_initial`.
 """
 function make_initial_params(model::Model, spec::TuringSpec)
-    validate_initial_tunables(
-        model.tunable_symbols,
-        model.tunable_initial,
-        make_priors(model),
-    )
+    priors = make_priors(model)
+    tunable_initial = make_initial_tunable_values(model, spec, priors)
+    validate_initial_tunables(model.tunable_symbols, tunable_initial, priors)
 
     initial_params = InitFromParams((
         σ=spec.noise_initial,
-        uncertain_sampled_values=collect(model.tunable_initial),
+        uncertain_sampled_values=collect(tunable_initial),
     ))
 
     return fill(initial_params, spec.n_chains)
+end
+
+function make_initial_tunable_values(model::Model, spec::TuringSpec, priors)
+    overrides = _normalize_parameter_overrides(spec.simulation.uncertain_param_values)
+    initial_values = Vector{Float64}(undef, length(model.tunable_symbols))
+
+    for (i, symbol) in enumerate(model.tunable_symbols)
+        has_override = haskey(overrides, symbol)
+        candidate = has_override ? overrides[symbol] : model.tunable_initial[i]
+        initial_values[i] = sampler_initial_value(symbol, candidate, priors[i]; from_override=has_override)
+    end
+
+    return Tuple(initial_values)
+end
+
+function sampler_initial_value(symbol::Symbol, value::Real, prior::Uniform; from_override::Bool=false)
+    initial_value = Float64(value)
+    lower = minimum(prior)
+    upper = maximum(prior)
+
+    if lower < initial_value < upper
+        return initial_value
+    end
+
+    if from_override
+        error(
+            "Initial override for uncertain parameter $symbol must be strictly inside " *
+            "Uniform($lower, $upper); got $initial_value. Turing cannot initialize " *
+            "NUTS exactly on a constrained boundary."
+        )
+    end
+
+    return mean(prior)
+end
+
+function sampler_initial_value(symbol::Symbol, value::Real, prior; from_override::Bool=false)
+    initial_value = Float64(value)
+
+    if isfinite(logpdf(prior, initial_value))
+        return initial_value
+    end
+
+    if from_override
+        error("Initial override for uncertain parameter $symbol is outside its prior support: value=$initial_value, prior=$prior.")
+    end
+
+    fallback = try
+        Float64(mean(prior))
+    catch
+        error("No valid initial value found for uncertain parameter $symbol. Provide a value in spec.simulation.uncertain_param_values.")
+    end
+
+    if !isfinite(logpdf(prior, fallback))
+        error("No valid initial value found for uncertain parameter $symbol. Provide a value in spec.simulation.uncertain_param_values.")
+    end
+
+    return fallback
 end
 
 # -------------------------------------------------------------------------
