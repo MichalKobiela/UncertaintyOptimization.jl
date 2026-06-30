@@ -38,25 +38,20 @@ sols = simulate!(model, init_cond, tspan)
 # end
 
 data_frame = CSV.read(
-    joinpath(@__DIR__, "reference", "RPA_real_data.csv"),
-    DataFrame;
-    normalizenames=true,
-    stripwhitespace=true,
+    joinpath(@__DIR__, "reference", "RPA_real_data.csv"), DataFrame; normalizenames=true, stripwhitespace=true,
 )
-time = data_frame.time
-background_fluorescence = 17.6
 # select specific modelled data
 data_selected = vcat(
     data_frame.experession20,
     data_frame.experession100,
     data_frame.expression1000,
-) .- background_fluorescence
+) .- 17.6 # adjust for background fluorescence
 
 rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
 nuts = NUTS(0.5, init_ϵ = 0.0065, max_depth=8)
 sim_spec = SimulationSpec(
-    t_obs = time,
+    t_obs = data_frame.time,
     obs_state = :A,
     initial_conditions = (24.0, 350.0),
     tspan = tspan,
