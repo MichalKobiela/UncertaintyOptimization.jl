@@ -20,10 +20,7 @@ using AdvancedHMC: DenseEuclideanMetric
 
 # Load model
 RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
-
-# Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
-# TODO - consider using @named with structural simplify for 100% certainty
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
@@ -37,6 +34,7 @@ sols = simulate!(model, init_cond, tspan)
 #     display(p)
 # end
 
+# load data
 data_frame = CSV.read(
     joinpath(@__DIR__, "reference", "RPA_real_data.csv"), DataFrame; normalizenames=true, stripwhitespace=true,
 )
@@ -46,8 +44,6 @@ data_selected = vcat(
     data_frame.experession100,
     data_frame.expression1000,
 ) .- 17.6 # adjust for background fluorescence
-
-rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
 nuts = NUTS(0.5, init_ϵ = 0.0065, max_depth=8)
 sim_spec = SimulationSpec(
@@ -73,6 +69,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a11_repr.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a12_repr.jls"), "w") do f
     serialize(f, chain)
 end
