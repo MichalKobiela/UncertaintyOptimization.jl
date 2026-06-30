@@ -53,7 +53,7 @@ model = Model(RPA_model, sys)
 # Define simulation parameters
 init_cond = (1.0, 1.0)
         
-# Ground truth values (must match original)
+# Ground truth values 
 params = Dict(
     :beta_RA => 0.1,
     :beta_AB => 0.001,
@@ -67,7 +67,7 @@ tspan = (0.0, 100.0)
 sol = only(simulate!(model, init_cond, params, tspan))
 sol_df = DataFrame(permutedims(Array(sol)), [:A, :B])
 insertcols!(sol_df, 1, :t => sol.t)
-CSV.write("rpa_sol_true.csv", sol_df)
+# CSV.write("rpa_true.csv", sol_df)
 
 # Generate noisy observations
 t_obs = collect(range(1, stop = 90, length = 30)) 
@@ -96,26 +96,20 @@ spec = TuringSpec(
 )
 
 @time chain = run_inference(model, spec)
-
-betas = [:beta_RA, :beta_BA, :beta_BB, :beta_AB]
-chain_df = DataFrame(chain[betas])[:, betas]
-posterior_samples = chain_df[sample(1:nrow(chain_df), sampling_size; replace=false), :]
-
+chain_df = DataFrame(chain)
 
 # Test if posterior draws distribution recovers the ground truth values
-function ci_contains_truth(chain, p::Symbol, truth::Real; level=0.95)
+function ci_contains_truth(posterior_draws, p::Symbol, truth::Real; level=0.95)
     α = 1 - level
-    posterior_draws = vec(Array(chain[p]))                 
     lo, hi = quantile(posterior_draws, (α/2, 1-α/2))        
     μ = mean(posterior_draws)
     return (param=p, mean=μ, lo=lo, hi=hi, truth=Float64(truth), in_CI=(lo <= truth <= hi))
 end
 
-truths = [params[beta] for beta in betas]
-rows = ci_contains_truth.(Ref(chain), betas, truths; level=0.95)
-
-for row in rows
-    println("Result: $(row)")
+for (beta, truth) in pairs(params)
+    posterior_draws = chain_df[!, beta]
+    result = ci_contains_truth(posterior_draws, beta, truth; level=0.95)
+    println("Result: $(result)")
 end
 
-CSV.write("RPA_posterior_samples.csv", posterior_samples)
+# CSV.write("RPA_posterior_samples.csv", chain_df)
