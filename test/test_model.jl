@@ -426,13 +426,24 @@ end
             
         # Run simulation
         sol = simulate!(model, u0, tspan; parameters=params)
-            
+
         # Check that solution exists
         @test sol !== nothing
 
         sol_with_warmup = simulate!(model, u0, tspan; parameters=params, return_simulate=true)
         @test sol_with_warmup.warmup_sol === nothing
         @test sol_with_warmup.sols !== nothing
+
+        default_model = UncertaintyOptimization.Model(model_def, sys)
+        keyword_model = UncertaintyOptimization.Model(model_def, sys)
+        positional_model = UncertaintyOptimization.Model(model_def, sys)
+
+        default_sol = only(simulate!(default_model, u0, tspan))
+        keyword_sol = only(simulate!(keyword_model, u0, tspan; parameters=params))
+        positional_sol = only(simulate!(positional_model, collect(u0), params, tspan))
+
+        @test positional_sol.u[end] ≈ keyword_sol.u[end]
+        @test maximum(abs.(positional_sol.u[end] .- default_sol.u[end])) > 1e-6
 
     end
 

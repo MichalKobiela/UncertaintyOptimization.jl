@@ -185,13 +185,15 @@ end
 """
     parse_values(x)
 
-Convert YAML vectors to tuples and leave scalar values unchanged.
+Convert YAML numeric scalars to `Float64` and vectors to tuples.
 """
 function parse_values(x)
     if isnothing(x)
         return x
     elseif x isa AbstractVector
-        return tuple(x...)
+        return tuple(Float64.(x)...)
+    elseif x isa Number
+        return Float64(x)
     else
         return x
     end

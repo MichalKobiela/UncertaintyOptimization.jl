@@ -8,7 +8,6 @@ using Turing
 using SciMLBase: VectorOfArray
 using SymbolicIndexingInterface
 using Random
-using PreallocationTools
 using Serialization
 using CSV, Tables
 using Plots
@@ -16,7 +15,7 @@ using DataFrames
 
 sampling_size = 1000
 # debug
-sampling_size = 50
+# sampling_size = 50
 
 Random.seed!(0);
 
@@ -44,7 +43,7 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 """
 
 # Load model
-RPA_model = load_model("./test/test-data/test_RPA.yml")
+RPA_model = load_model(normpath(joinpath(@__DIR__, "..", "test", "test-data", "test_RPA.yml")))
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)
@@ -52,7 +51,7 @@ RPA_model = load_model("./test/test-data/test_RPA.yml")
 model = Model(RPA_model, sys)
 
 # Define simulation parameters
-init_cond = [1.0, 1.0]
+init_cond = (1.0, 1.0)
         
 # Ground truth values (must match original)
 params = Dict(
@@ -65,9 +64,8 @@ params = Dict(
 tspan = (0.0, 100.0)
         
 # Run simulation
-# sol = simulate!(model, init_cond, params, tspan)
-
-CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
+sol = only(simulate!(model, init_cond, params, tspan))
+# CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
 
 # Generate noisy observations
 t_obs = collect(range(1, stop = 90, length = 30)) 

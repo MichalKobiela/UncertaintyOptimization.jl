@@ -193,6 +193,52 @@ function _normalize_simulation_tspan(tspan)
     error("tspan must be `(start, stop)` or `((warmup_start, warmup_stop), (production_start, production_stop))`.")
 end
 
+function _normalize_initial_conditions(initial_conditions::Tuple{Vararg{Number}})
+    return Tuple(Float64.(initial_conditions))
+end
+
+function _normalize_initial_conditions(initial_conditions::AbstractVector{<:Number})
+    return Tuple(Float64.(initial_conditions))
+end
+
+function _normalize_parameter_overrides(parameters::Dict)
+    overrides = Dict{Symbol, Float64}()
+
+    for (name, value) in parameters
+        if !(value isa Number)
+            error("Parameter override values must be scalar numbers. Got $(typeof(value)).")
+        end
+
+        overrides[Symbol(name)] = Float64(value)
+    end
+
+    return overrides
+end
+
+function _parameter_override_inputs(model::Model, parameters::Dict)
+    overrides = _normalize_parameter_overrides(parameters)
+
+    if isempty(overrides)
+        return (parameter_setter=nothing, parameter_values=nothing)
+    end
+
+    param_pairs = collect(overrides)
+    parameter_nums = map(param_pairs) do (name, _)
+        try
+            getproperty(model.sys, name)
+        catch
+            error("Parameter override $name was not found in the model system.")
+        end
+    end
+
+    parameter_values = last.(param_pairs)
+
+    return (
+        parameter_setter=setp(model.sys, parameter_nums),
+        parameter_values=parameter_values,
+    )
+end
+
 """
     extract_multiparams(parameters; design=false)
 
@@ -334,6 +380,7 @@ end
 """
     simulate!(model, simulation; kwargs...)
     simulate!(model, initial_conditions, tspan; kwargs...)
+    simulate!(model, initial_conditions, parameters, tspan; kwargs...)
 
 Run the simulation/build stage for a model.
 
@@ -368,6 +415,44 @@ present, the vector contains one solution per stage. With `return_simulate=true`
 the returned named tuple also includes the warmup solution, or `nothing` if no
 warmup values were configured.
 """
+function simulate!(model::Model,
+                   initial_conditions,
+                   parameters::Dict,
+                   tspan;
+                   kwargs...)
+    return simulate!(
+        model,
+        _normalize_initial_conditions(initial_conditions),
+        tspan;
+        parameters=parameters,
+        kwargs...,
+    )
+end
+
+function simulate!(model::Model,
+                   initial_conditions::AbstractVector{<:Number},
+                   tspan;
+                   kwargs...)
+    return simulate!(
+        model,
+        _normalize_initial_conditions(initial_conditions),
+        tspan;
+        kwargs...,
+    )
+end
+
+function simulate!(model::Model,
+                   initial_conditions::Tuple{Vararg{Number}},
+                   tspan;
+                   kwargs...)
+    return simulate!(
+        model,
+        _normalize_initial_conditions(initial_conditions),
+        tspan;
+        kwargs...,
+    )
+end
+
 function simulate!(model::Model, 
                    initial_conditions::Tuple{Vararg{Float64}},
                    tspan
@@ -386,6 +471,16 @@ function simulate!(model::Model,
                    return_simulate::Bool = false,
                    design::Bool = false,
                    )
+    if !isempty(parameters)
+        if !isnothing(parameter_setter) || !isnothing(parameter_values)
+            error("Pass either `parameters` or `parameter_setter`/`parameter_values`, not both.")
+        end
+
+        parameter_overrides = _parameter_override_inputs(model, parameters)
+        parameter_setter = parameter_overrides.parameter_setter
+        parameter_values = parameter_overrides.parameter_values
+    end
+
     warmup_tspan, production_tspan = _normalize_simulation_tspan(tspan)
 
     # build the problem once
@@ -547,8 +642,10 @@ function setup_simulation!(model::Model,
         end
     end
 
-    # This creates the dictionary that MTK needs to build the problem
-    params = merge(p_map, warmup_map)
+    # This creates the dictionary that MTK needs to build the problem.
+    # Warmup values intentionally win for the warmup problem; per-call overrides
+    # are reapplied before production solves by `simulate!`.
+    params = merge(p_map, _normalize_parameter_overrides(parameters), warmup_map)
 
     p_map_vars = Dict(
         getproperty(model.sys, name) => val for (name, val) in params
