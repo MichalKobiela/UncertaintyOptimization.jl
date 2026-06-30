@@ -1,4 +1,3 @@
-# using Revise
 using OrdinaryDiffEq
 using CSV, Tables
 using LinearAlgebra: I
@@ -7,9 +6,7 @@ using Random
 using Serialization
 using Plots
 using DataFrames
-# using Distributions
-# using DistributionsAD
-# using BenchmarkTools
+
 
 
 Random.seed!(0);
@@ -158,43 +155,25 @@ prob = ODEProblem(odes_warm_up!, u0, tspan, params)
     return nothing
 end
 
-time = CSV.read(string(@__DIR__)*"/RPA_real_data/time_points.csv", 
-        DataFrame)[!,1]
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
-        DataFrame))
-background_fluorescence = 17.6
-data = data .- background_fluorescence
+data_frame = CSV.read(
+    joinpath(@__DIR__, "RPA_real_data.csv"), DataFrame; normalizenames=true, stripwhitespace=true)
 # select specific modelled data
-data_subset = vcat(data[:,2], data[:,5], data[:,9])
+data_subset = vcat(
+    data_frame.experession20,
+    data_frame.experession100,
+    data_frame.expression1000,
+) .- 17.6 # subtract background fluorescence
 
+model = fit(data_subset, prob, data_frame.time)
 
-model = fit(data_subset, prob, time)#, force_values=guesses_values)
-
-init_params = Dict(
-    :σ => 3.0,
-    :alpha_1 => 83.4743,
-    :kx1 => 1.28e-8,
-    :nx1 => 2.34,
-    :beta_1 => 11.9586,
-    :alpha_2 => 391.1627,
-    :kx2 => 36.4063,
-    :nx2 => 1.3,
-    :beta_2 => 3.9e-4,
-    :alpha_4 => 8.7519e6,
-    :kr => 0.51,
-    :nr => 3.2,
-    :beta_4 => 7.1347,
-    :r1 => 89.0635,
-    :r2 => 7.0188,
-    :alpha_3 => 17.7437,
-    :beta_3 => 0.6644,
-)
+initial_param_names = (:σ, tunable_params...)
+initial_param_values = (3.0, (guess_map[param] for param in tunable_params)...)
+initial_params = [InitFromParams(NamedTuple{initial_param_names}(initial_param_values))]
 
 Random.seed!(4)
 nuts = NUTS(0.65,init_ϵ = 0.001)
-chain = sample(model, nuts , MCMCSerial(), 3000, 1, init_params = init_params)
+chain = sample(model, nuts , MCMCSerial(), 3000, 1, initial_params = initial_params)
 
 f = open(string(@__DIR__)*"/reproduce_original_mk11_sanityJ12.jls", "w")
 serialize(f, chain)
 close(f)
-
