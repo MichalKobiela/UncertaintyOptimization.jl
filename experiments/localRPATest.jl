@@ -65,7 +65,9 @@ tspan = (0.0, 100.0)
         
 # Run simulation
 sol = only(simulate!(model, init_cond, params, tspan))
-# CSV.write(".//experiments//RPA_data//rpa_sol_true.csv", Tables.table(sol.u))
+sol_df = DataFrame(permutedims(Array(sol)), [:A, :B])
+insertcols!(sol_df, 1, :t => sol.t)
+CSV.write("rpa_sol_true.csv", sol_df)
 
 # Generate noisy observations
 t_obs = collect(range(1, stop = 90, length = 30)) 
@@ -88,7 +90,7 @@ spec = TuringSpec(
     data = data,
     noise_prior = InverseGamma(2,3), 
     noise_initial = 3.0, 
-    sampler = NUTS(0.65),
+    sampler = NUTS(0.5),
     n_samples = sampling_size,
     n_chains = 3,
 )
@@ -115,47 +117,5 @@ rows = ci_contains_truth.(Ref(chain), betas, truths; level=0.95)
 for row in rows
     println("Result: $(row)")
 end
-
-# samp = Array(chain[:beta_AB])              # size: (niter, nchains, 1) or similar
-# v = vec(samp)                            # flatten all draws
-
-# ci = quantile(v, (0.025, 0.975))         # (lower, upper)
-
-# beta_true = params[:beta_AB]                       # example
-# in_ci = (ci[1] <= beta_true <= ci[2])
-# println("beta_AB is in the ci, $(in_ci)")
-
-
-
-
-# -------------Compare to the previous data-----------------------------------
-
-# # Load original posterior samples
-# og_posterior_file = "./test/test-data/posterior_samples_og.csv"
-# og_posterior_data = CSV.File(og_posterior_file; header=false) |> Tables.matrix
-
-# # The original CSV has columns in THIS specific order
-# column_order = [:beta_RA, :beta_BA, :beta_AB, :beta_BB]
-
-# # Build dict mapping parameter name -> (min, max) from original
-# param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
-
-# for (i, name) in enumerate(column_order)
-#      col_values = og_posterior_data[:, i]              # extract the column
-#      min_val = minimum(col_values)
-#      max_val = maximum(col_values)
-#      param_ranges[name] = (min_val, max_val)
-#      println("Column: $name  |  min: $min_val  max: $max_val")
-#  end
-
-#  param_ranges = Dict{Symbol, Tuple{Float64, Float64}}()
-
-# for (i, name) in enumerate(column_order)
-#      col_values = samples[:, i]              # extract the column
-#      min_val = minimum(col_values)
-#      max_val = maximum(col_values)
-#      param_ranges[name] = (min_val, max_val)
-#      println("Column: $name  |  min: $min_val  max: $max_val")
-#  end
 
 CSV.write(".//experiments//RPA_data//posterior_samples.csv",  Tables.table(samples), writeheader=true)
