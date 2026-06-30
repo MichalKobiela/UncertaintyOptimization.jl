@@ -16,12 +16,12 @@ simulation:
 
 parameters:
   alpha_1:
-    value: 100
+    value: 100.0
     role: design
     bounds: [10.0, 200.0]
 
   alpha_2:
-    value: 100
+    value: 100.0
     role: design
     bounds: [10.0, 200.0]
 
