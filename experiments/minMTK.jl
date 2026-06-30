@@ -44,23 +44,35 @@ const SOLVER = AutoTsit5(Rosenbrock23(autodiff=false))
 @parameters kx3 [tunable = false]
 @parameters cuma [tunable = false]
 
-# soft
-# eqs = [
-#     D(B) ~ 0.02 * (alpha_3 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx3^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_3) *
-#           (alpha_4 / (1 + (((A + sqrt(A^2 + 1e-12)) / 2) / kr)^nr) + beta_4) -
-#           0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2),
-#     D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-#           (alpha_2 * (((B + sqrt(B^2 + 1e-12)) / 2)^nx2) / (kx2^nx2 + ((B + sqrt(B^2 + 1e-12)) / 2)^nx2) + beta_2) -
-#           0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
-#     ]
+hill_eps = 1e-12
+production_scale = 0.02
+
+A_pos = max(A, 0)
+B_pos = max(B, 0)
+cuma_signal = 1 + cuma / kx1
+
+log_hill(numerator, denominator, n, eps) =
+    1 / (1 + exp(n * (log(numerator + eps) - log(denominator + eps))))
+
+hill_cuma = log_hill(kcymRtot, cuma_signal, nx1, hill_eps)
+hill_B_kx2 = log_hill(kx2, B_pos, nx2, hill_eps)
+hill_B_kx3 = log_hill(kx3, B_pos, nx2, hill_eps)
+hill_A_kr = log_hill(A_pos, kr, nr, hill_eps)
+
+A_cuma_factor = alpha_1 * hill_cuma + beta_1
+A_B_factor = alpha_2 * hill_B_kx2 + beta_2
+B_B_factor = alpha_3 * hill_B_kx3 + beta_3
+B_A_factor = alpha_4 * hill_A_kr + beta_4
+
+A_production = production_scale * A_cuma_factor * A_B_factor
+B_production = production_scale * B_B_factor * B_A_factor
+A_decay = production_scale * r1 * A_pos
+B_decay = 0.1 * r2 * B_pos
+
 eqs = [
-    D(B) ~ 0.02 * (alpha_3 * (max(B, 0)^nx2) / (kx3^nx2 + max(B, 0)^nx2) + beta_3)  *
-          (alpha_4 / (1 + (max(A, 0) / kr)^nr) + beta_4) -
-          0.1 * r2 * max(B, 0),
-    D(A) ~ 0.02 * (alpha_1 / (1 + (kcymRtot / (1 + cuma / kx1))^nx1) + beta_1) *
-        (alpha_2 * (max(B, 0)^nx2) / (kx2^nx2 + max(B, 0)^nx2) + beta_2) -
-        0.02 * r1 * max(A, 0),
-    ]
+    D(A) ~ A_production - A_decay,
+    D(B) ~ B_production - B_decay,
+]
 
 @mtkcompile ns = System(eqs, t)
 
@@ -195,6 +207,6 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_r11_correctInitials_test.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r12_rewritten_start.jls", "w")
 serialize(f, chain_named)
 close(f)
