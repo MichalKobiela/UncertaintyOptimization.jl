@@ -22,19 +22,6 @@ Random.seed!(0);
 
 
 const SOLVER = AutoTsit5(Rosenbrock23(autodiff=false))
-# const SOLVER = Rosenbrock23(autodiff=AutoForwardDiff())
-# const SOLVER = Rosenbrock23(autodiff=AutoReverseDiff(compile=false), concrete_jac = true)
-# const SOLVER = Rosenbrock23(autodiff=false)
-
-# const SOLVER = AutoTsit5(
-#     Rosenbrock23(autodiff=AutoForwardDiff());
-#     stiffalgfirst = true,
-#     maxstiffstep = 1,
-#     maxnonstiffstep = 1000,
-#     nonstifftol = 0.1,
-#     stifftol = 0.1,
-#     dtfac = 1,
-# )
 
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true]
@@ -181,22 +168,17 @@ end
 
 # prepare data (time point and measurements)
 data_frame = CSV.read(
-    joinpath(@__DIR__, "reference", "RPA_real_data.csv"),
-    DataFrame;
-    normalizenames=true,
-    stripwhitespace=true,
+    joinpath(@__DIR__, "reference", "RPA_real_data.csv"), DataFrame; normalizenames=true, stripwhitespace=true,
 )
-time = data_frame.time
-background_fluorescence = 17.6
 # select specific experimental data conditions
 data_subset = vcat(
     data_frame.experession20,
     data_frame.experession100,
     data_frame.expression1000,
-) .- background_fluorescence
+) .- 17.6 # adjust for background fluorescence
 
 
-model = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
+model = fit(data_subset, prob, data_frame.time, tunable_priors, InverseGamma(2, 3))
 
 initial_params_draws = (;
     σ = 3.0,
