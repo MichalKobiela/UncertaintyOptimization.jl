@@ -4,12 +4,12 @@ CurrentModule = UncertaintyOptimization
 
 # Workflow
 
-UncertaintyOptimization follows the publication workflow for risk-averse
-optimization under uncertainty. A study is organized around mechanistic model
-definition, Bayesian inference for uncertain parameters, Thompson-sampling-based
-design optimization, and risk-averse selection of final designs.
+UncertaintyOptimization supports risk-averse optimization under uncertainty. A
+study is organized around mechanistic model definition, Bayesian inference for
+uncertain parameters, Thompson-sampling-based design optimization, and
+risk-averse selection of final designs.
 
-The publication-facing stages are:
+The main stages are:
 
 1. Model the system.
 2. Define the design goal.
@@ -18,9 +18,9 @@ The publication-facing stages are:
 5. Optimize designs via Thompson sampling.
 6. Manage risk and select final design(s).
 
-The package adds a reusable simulation/build layer around those stages. The same
-loaded model and `SimulationSpec` can be reused so expensive ModelingToolkit and
-SciML setup is paid once and then reused by inference, Thompson sampling, and
+A reusable simulation/build layer sits around those stages. The same loaded
+model and `SimulationSpec` can be reused so expensive ModelingToolkit and SciML
+setup is paid once and then reused by inference, Thompson sampling, and
 evaluation.
 
 ## Model The System
@@ -38,7 +38,7 @@ Required model sections are:
 - `equations`: one right-hand-side expression for each declared state.
 - `inputs`: currently a step input signal.
 
-Parameter roles encode the publication's parameter split:
+Parameter roles encode how each parameter is used:
 
 - `fixed`: a high-confidence constant or staged experimental condition.
 - `uncertain`: a parameter inferred from observed data through its prior and
@@ -84,31 +84,20 @@ simulation = SimulationSpec(
 sols = simulate!(model, simulation)
 ```
 
-When warmup and production need different time spans, pass a pair of intervals:
-
-```julia
-simulation = SimulationSpec(
-    t_obs = collect(range(0.0, 5.45, length = 30)),
-    obs_state = :A,
-    initial_conditions = (1.0, 1.0),
-    tspan = ((0.0, 10.0), (0.0, 5.45)),
-    solver = Rosenbrock23(),
-)
-```
-
 Warmup values and tuple-valued staged parameters are taken from the YAML
-parameter metadata. With `return_simulate = true`, `simulate!` returns both the
-optional warmup solution and the production solutions.
+parameter metadata. `SimulationSpec.tspan` may also use separate warmup and
+production intervals; see [Warmup And Production Time Spans](@ref). With
+`return_simulate = true`, `simulate!` returns both the optional warmup solution
+and the production solutions.
 
 These simulated trajectories are the model predictions compared with observed
 data during inference and with target behavior during design evaluation.
 
 ## Infer Uncertain Parameters From Observed Data
 
-Inference estimates uncertain parameters from observed data. In the publication,
-this is the stage that turns prior knowledge into a posterior distribution over
-uncertain parameters. In the package, parameters marked `uncertain` in YAML
-receive priors, and `run_inference` samples their posterior with Turing.
+Inference turns prior knowledge and observed data into a posterior distribution
+over uncertain parameters. Parameters marked `uncertain` in YAML receive priors,
+and `run_inference` samples their posterior with Turing.
 
 For Turing-based Bayesian inference, create a `TuringSpec` from a
 `SimulationSpec` and observed data, then call `run_inference`.
@@ -140,10 +129,10 @@ stage.
 
 ## Define The Design Goal
 
-The publication expresses the desired behavior as a loss function: low loss
-means the simulated circuit is close to the target set point, trajectory,
-amplitude, frequency, or other design objective. In the package, the `loss`
-function supplied to `CartesianScanner` plays the same role.
+Desired behavior is encoded as a loss function: low loss means the simulated
+circuit is close to the target set point, trajectory, amplitude, frequency, or
+other design objective. The `loss` function supplied to `CartesianScanner` plays
+this role.
 
 ```julia
 function loss(warmup_sol, predicted_sol; sys = nothing)
@@ -159,14 +148,11 @@ loss, or provide a custom evaluator to `run_scan`.
 
 ## Optimize Designs Via Thompson Sampling
 
-The publication obtains Thompson samples by drawing uncertain parameters from
-the posterior and optimizing the design parameters for each draw. In this
-package, `CartesianScanner` implements that idea with a grid of candidate design
-values. For each posterior sample, `run_scan` simulates every candidate and marks
-the lowest-loss candidate as the best design for that posterior draw.
-
-`CartesianScanner` is an alias for `ThompsonGridSpec`; it defines the shared
-simulation settings, candidate design grid, and scalar predictive-loss function.
+Thompson samples are obtained by drawing uncertain parameters from the posterior
+and optimizing the design parameters for each draw. `CartesianScanner`
+implements that idea with a grid of candidate design values. For each posterior
+sample, `run_scan` simulates every candidate and marks the lowest-loss candidate
+as the best design for that posterior draw.
 
 ```julia
 scan = CartesianScanner(
@@ -181,24 +167,26 @@ thompson_results = run_scan(chain, scan, model)
 chosen_designs = thompson_results[thompson_results.is_best, :]
 ```
 
+`run_scan` returns a `DataFrame`. Each row is one posterior sample and one
+candidate design combination.
+
 For `kind = :scale`, each grid value multiplies the posterior draw for an
 uncertain parameter, or the scalar YAML value for a fixed/design parameter. For
 `kind = :value`, the grid value is used directly.
 
-The rows with `is_best == true` are the package's grid-based Thompson samples:
-one selected design for each posterior draw.
+The rows with `is_best == true` are the grid-based Thompson samples: one
+selected design for each posterior draw.
 
 ## Manage Risk And Select Final Designs
 
-The publication evaluates designs through the predictive loss distribution under
-posterior uncertainty and biomolecular noise, then uses risk-averse summaries
-such as upper quantiles to avoid designs that only work in favorable
-conditions.
+Designs are evaluated through the predictive loss distribution under posterior
+uncertainty and biomolecular noise, then ranked with risk-averse summaries such
+as upper quantiles to avoid designs that only work in favorable conditions.
 
-In the package, evaluation reuses `run_scan`, usually over a smaller set of
-candidate designs chosen during Thompson sampling. The returned table has one
-row per posterior sample and candidate, including candidate values, resolved
-parameter values, `loss`, `is_best`, and `best_loss`.
+Evaluation reuses `run_scan`, usually over a smaller set of candidate designs
+chosen during Thompson sampling. The returned `DataFrame` has one row per
+posterior sample and candidate, including candidate values, resolved parameter
+values, `loss`, `is_best`, and `best_loss`.
 
 ```julia
 candidate_values = unique(chosen_designs.kx2_scaler)
@@ -217,13 +205,12 @@ evaluation_results = run_scan(chain, evaluation_scan, model)
 Common evaluation summaries group by the candidate columns and aggregate losses,
 for example median loss, upper quantiles such as the 75% quantile, standard
 deviation, or the number of times a candidate was selected during Thompson
-sampling. These summaries correspond to the publication's risk-neutral and
-risk-averse views of design performance.
+sampling. These summaries provide risk-neutral and risk-averse views of design
+performance.
 
-## From Package Outputs To Publication Quantities
+## From Outputs To Design Summaries
 
-The objects returned by the package map directly onto the quantities discussed
-in the publication:
+The returned objects map directly onto the workflow quantities:
 
 - `chain`: posterior samples of uncertain parameters inferred from observed
   data.
@@ -248,6 +235,31 @@ risk_summary = combine(
 )
 ```
 
-Candidates with low median loss and low upper-quantile loss correspond to the
-publication's robust designs: they are predicted to work well on average and to
-avoid large losses under unfavorable posterior draws.
+Candidates with low median loss and low upper-quantile loss are robust designs:
+they are predicted to work well on average and to avoid large losses under
+unfavorable posterior draws.
+
+## Warmup And Production Time Spans
+
+When warmup and production need different time spans, pass a pair of intervals to
+`SimulationSpec.tspan`. The first interval is used for the warmup solve, and the
+second interval is used for each production solve.
+
+```julia
+simulation = SimulationSpec(
+    t_obs = collect(range(0.0, 5.45, length = 30)),
+    obs_state = :A,
+    initial_conditions = (1.0, 1.0),
+    tspan = ((0.0, 10.0), (0.0, 5.45)),
+    solver = Rosenbrock23(),
+)
+```
+
+A single interval, such as `tspan = (0.0, 100.0)`, is used for both warmup and
+production.
+
+## API Naming Notes
+
+The workflow examples use `CartesianScanner` as the public name for grid-based
+candidate evaluation. `CartesianScanner` is an alias for `ThompsonGridSpec`,
+which is the underlying specification type used by `run_scan`.

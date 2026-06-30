@@ -4,17 +4,16 @@ CurrentModule = UncertaintyOptimization
 
 # YAML Model Files
 
-YAML files define the mechanistic model and parameter metadata used by the
-publication workflow. They do not define the full run: observation times,
-initial conditions, solver choice, observed states, observed data, loss
-functions, and sampling settings are supplied later in Julia with
-`SimulationSpec`, `TuringSpec`, and `CartesianScanner`.
+YAML files define the mechanistic model and parameter metadata used by the full
+workflow. They do not define the full run: observation times, initial
+conditions, solver choice, observed states, observed data, loss functions, and
+sampling settings are supplied later in Julia with `SimulationSpec`,
+`TuringSpec`, and `CartesianScanner`.
 
-The most important YAML choice is each parameter's `role`. Roles connect the
-file to the publication language: `uncertain` parameters are inferred from
-observed data, `design` parameters are controllable variables optimized during
-Thompson sampling, and `fixed` parameters are held constant or used to represent
-staged experimental conditions.
+The most important YAML choice is each parameter's `role`. `uncertain`
+parameters are inferred from observed data, `design` parameters are controllable
+variables optimized during Thompson sampling, and `fixed` parameters are held
+constant or used to represent staged experimental conditions.
 
 A minimal example file is included in the repository at
 `docs/src/examples/minimal_model.yml`.
@@ -90,8 +89,8 @@ states, parameters, and the generated `input` signal.
 
 `parameters` defines every parameter used by the equations. Each parameter has a
 `role`, and may also define values, priors, bounds, warmup values, and
-design-stage metadata. This is where the publication's distinction between
-uncertain parameters and design parameters enters the package.
+design-stage metadata. This is where uncertain parameters and design parameters
+enter the workflow.
 
 `inputs` defines the input signal. The current loader supports a step input:
 before `t_threshold` it uses `values[1]`, and after that threshold it uses
@@ -225,8 +224,7 @@ For the minimal example, one observed state, ten observation times, and three
 staged `dose` values require `30` observations. The order is stage first, then
 observed state, then time. For one state this means all time points for
 `dose = 0.5`, then all time points for `dose = 1.0`, then all time points for
-`dose = 2.0`. This flattened vector is the package representation of the
-publication's observed trajectories.
+`dose = 2.0`. This flattened vector represents the observed trajectories.
 
 ## Design Stage Values
 
@@ -247,4 +245,4 @@ When `run_scan` evaluates a candidate, the default evaluator calls `simulate!`
 with `design = true`. This means design warmup values and design production
 values are used where they are defined, while uncertain parameters still come
 from the posterior sample. This lets the same mechanistic model support both
-posterior inference and the publication's risk-averse design stage.
+posterior inference and risk-averse design.
