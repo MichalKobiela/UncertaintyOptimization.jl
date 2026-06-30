@@ -21,6 +21,10 @@ The package building blocks correspond to the publication workflow as follows:
 - **Optimize designs with Thompson samples**: `CartesianScanner` and `run_scan` evaluate candidate design values for each posterior draw, matching the paper's Thompson-sampling idea in a grid-scan form.
 - **Evaluate and select robust designs**: the `run_scan` output records candidate values, resolved parameter values, losses, and best-design markers so downstream summaries can rank candidates by median loss, high quantiles, or other risk-aware criteria.
 
+## Reference Implementations
+
+The repository also keeps reference implementations for comparing the package workflow against earlier scripts. For these, the docs use a one-page starter style: a single script that shows the full setup, model definition, inference call, and saved output in one place. The current starter is [`experiments/reproduce_original_mk.jl`](https://github.com/MichalKobiela/UncertaintyOptimization.jl/blob/main/experiments/reproduce_original_code.jl), which reproduces the original adaptation-circuit inference workflow with newer Julia libraries.
+
 The package workflow is organised around a small set of stages:
 
 - load a symbolic model from YAML;

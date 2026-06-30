@@ -37,13 +37,20 @@ sols = simulate!(model, init_cond, tspan)
 #     display(p)
 # end
 
-time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", 
-        DataFrame))
+data_frame = CSV.read(
+    joinpath(@__DIR__, "reference", "RPA_real_data.csv"),
+    DataFrame;
+    normalizenames=true,
+    stripwhitespace=true,
+)
+time = data_frame.time
 background_fluorescence = 17.6
-data = data .- background_fluorescence
 # select specific modelled data
-data_selected = vcat(data[:,2], data[:,5], data[:,9])
+data_selected = vcat(
+    data_frame.experession20,
+    data_frame.experession100,
+    data_frame.expression1000,
+) .- background_fluorescence
 
 rosen_opts = (rtol=1e-5, atol=1e-7, maxiters=1_000_000)
 
@@ -71,6 +78,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a10_parallel_doubleTspan_hill.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a11_repr.jls"), "w") do f
     serialize(f, chain)
 end

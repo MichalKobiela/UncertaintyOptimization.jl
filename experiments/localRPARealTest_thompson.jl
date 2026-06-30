@@ -25,7 +25,13 @@ RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
 @mtkcompile sys = System(RPA_model.equations, t)
 model = Model(RPA_model, sys)
 
-time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
+data_frame = CSV.read(
+    joinpath(@__DIR__, "reference", "RPA_real_data.csv"),
+    DataFrame;
+    normalizenames=true,
+    stripwhitespace=true,
+)
+time = data_frame.time
 sim_spec = SimulationSpec(
     t_obs = time,
     obs_state = :A,

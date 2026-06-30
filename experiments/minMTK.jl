@@ -180,12 +180,20 @@ B_idx = findfirst(isequal(ns.B), state_order)
 end
 
 # prepare data (time point and measurements)
-time = CSV.File(joinpath(@__DIR__, "RPA_real_data/time_points.csv")).time
-data = Matrix(CSV.read(string(@__DIR__)*"/RPA_real_data/data.csv", DataFrame))
+data_frame = CSV.read(
+    joinpath(@__DIR__, "reference", "RPA_real_data.csv"),
+    DataFrame;
+    normalizenames=true,
+    stripwhitespace=true,
+)
+time = data_frame.time
 background_fluorescence = 17.6
-data = data .- background_fluorescence
 # select specific experimental data conditions
-data_subset = vcat(data[:,2], data[:,5], data[:,9])
+data_subset = vcat(
+    data_frame.experession20,
+    data_frame.experession100,
+    data_frame.expression1000,
+) .- background_fluorescence
 
 
 model = fit(data_subset, prob, time, tunable_priors, InverseGamma(2, 3))
