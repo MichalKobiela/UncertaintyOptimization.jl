@@ -4,10 +4,17 @@ CurrentModule = UncertaintyOptimization
 
 # YAML Model Files
 
-YAML files define the symbolic model and parameter metadata. They do not define
-the full run: observation times, initial conditions, solver choice, observed
-states, and sampling settings are supplied later in Julia with `SimulationSpec`,
-`TuringSpec`, and `CartesianScanner`.
+YAML files define the mechanistic model and parameter metadata used by the
+publication workflow. They do not define the full run: observation times,
+initial conditions, solver choice, observed states, observed data, loss
+functions, and sampling settings are supplied later in Julia with
+`SimulationSpec`, `TuringSpec`, and `CartesianScanner`.
+
+The most important YAML choice is each parameter's `role`. Roles connect the
+file to the publication language: `uncertain` parameters are inferred from
+observed data, `design` parameters are controllable variables optimized during
+Thompson sampling, and `fixed` parameters are held constant or used to represent
+staged experimental conditions.
 
 A minimal example file is included in the repository at
 `docs/src/examples/minimal_model.yml`.
@@ -83,7 +90,8 @@ states, parameters, and the generated `input` signal.
 
 `parameters` defines every parameter used by the equations. Each parameter has a
 `role`, and may also define values, priors, bounds, warmup values, and
-design-stage metadata.
+design-stage metadata. This is where the publication's distinction between
+uncertain parameters and design parameters enters the package.
 
 `inputs` defines the input signal. The current loader supports a step input:
 before `t_threshold` it uses `values[1]`, and after that threshold it uses
@@ -92,16 +100,21 @@ before `t_threshold` it uses `values[1]`, and after that threshold it uses
 ## Parameter Roles
 
 `fixed` parameters are ordinary scalar or staged values. They are not sampled
-during inference. In the example, `baseline` is scalar and `dose` is staged.
+during inference and are not optimized as design parameters. Use them for
+parameters that can be treated as known with high confidence, or for staged
+experimental conditions. In the example, `baseline` is scalar and `dose` is
+staged.
 
-`uncertain` parameters are tunable parameters. They need an initial scalar
-`value` and a `prior` when used with `TuringSpec`. In the example, `decay` is
-sampled from a uniform prior.
+`uncertain` parameters are the model parameters whose values are not known
+before seeing the observed data. They need an initial scalar `value` and a
+`prior` when used with `TuringSpec`. During inference, `run_inference` updates
+those priors into posterior samples. In the example, `decay` is sampled from a
+uniform prior.
 
-`design` parameters are candidates for design-stage scans. They can have a
-normal `value`, optional `bounds`, and optional nested `design` values. In the
-example, `drive` is a design parameter that can be changed during Thompson
-sampling or evaluation.
+`design` parameters are controllable parameters that can be changed during
+design optimization. They can have a normal `value`, optional `bounds`, and
+optional nested `design` values. In the example, `drive` is a design parameter
+that can be changed during Thompson sampling or risk-averse evaluation.
 
 ## Parameter Fields
 
@@ -113,8 +126,8 @@ a tuple and creates staged production solves.
 warmup, the final warmup state becomes the initial condition for each production
 solve.
 
-`prior` describes the distribution for an `uncertain` parameter. The currently
-supported prior metadata is:
+`prior` describes the prior distribution for an `uncertain` parameter. The
+currently supported prior metadata is:
 
 ```yaml
 prior:
@@ -124,15 +137,15 @@ prior:
 ```
 
 `bounds` records a design range. Bounds are metadata for design workflows; the
-scanner receives its concrete grid through `CartesianScanner`.
+scanner receives its concrete candidate grid through `CartesianScanner`.
 
 `design` gives design-stage values for `run_scan`, which calls `simulate!` with
 `design = true`. `design.warmup_value` is used during the design warmup solve,
 and `design.value` is used for design-stage production solves.
 
 Scan candidate ranges are not stored in YAML. Put them in the `values` field of
-`CartesianScanner(scan = [...])` so the model definition stays separate from the
-design experiment:
+`CartesianScanner(scan = [...])` so the mechanistic model stays separate from
+the design experiment:
 
 ```julia
 scan = CartesianScanner(
@@ -175,7 +188,7 @@ sim.sols
 
 `sim.warmup_sol` is `nothing` when no warmup values are configured.
 
-## Multiple Experiments And Staged Parameters
+## Observed Data And Staged Parameters
 
 Vector-valued parameter `value`s represent multiple production conditions. The
 model is built once, then `simulate!` runs one production solve per vector
@@ -188,7 +201,8 @@ dose:
   role: fixed
 ```
 
-This creates three production solves:
+This creates three production solves, which correspond to three observed
+trajectories in the observed data:
 
 1. `dose = 0.5`
 2. `dose = 1.0`
@@ -211,7 +225,8 @@ For the minimal example, one observed state, ten observation times, and three
 staged `dose` values require `30` observations. The order is stage first, then
 observed state, then time. For one state this means all time points for
 `dose = 0.5`, then all time points for `dose = 1.0`, then all time points for
-`dose = 2.0`.
+`dose = 2.0`. This flattened vector is the package representation of the
+publication's observed trajectories.
 
 ## Design Stage Values
 
@@ -231,4 +246,5 @@ drive:
 When `run_scan` evaluates a candidate, the default evaluator calls `simulate!`
 with `design = true`. This means design warmup values and design production
 values are used where they are defined, while uncertain parameters still come
-from the posterior sample.
+from the posterior sample. This lets the same mechanistic model support both
+posterior inference and the publication's risk-averse design stage.

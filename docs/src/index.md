@@ -6,32 +6,32 @@ CurrentModule = UncertaintyOptimization
 
 Documentation for [UncertaintyOptimization](https://github.com/MichalKobiela/UncertaintyOptimization.jl).
 
-Package for risk-averse optimisation under uncertainty.
+Package for risk-averse optimization under uncertainty.
 
 ## Publication
 
-This package accompanies the workflow described in [Risk-averse optimization of genetic circuits under uncertainty](https://www.cell.com/cell-systems/fulltext/S2405-4712(25)00309-6) by Kobiela, Oyarzun, and Gutmann, published in *Cell Systems*. The paper presents a design strategy for genetic circuits whose mathematical models contain uncertain parameters. It uses data from previous designs, including non-functional prototypes, to infer a posterior distribution over uncertain model parameters, then applies Thompson sampling and risk-aware evaluation to choose designs that are expected to perform well despite epistemic uncertainty and biomolecular noise. The examples include adaptation circuits and genetic oscillators, showing how posterior uncertainty can be turned into more robust design choices.
+This package accompanies the workflow described in [Risk-averse optimization of genetic circuits under uncertainty](https://www.cell.com/cell-systems/fulltext/S2405-4712(25)00309-6) by Kobiela, Oyarzun, and Gutmann, published in *Cell Systems*. The paper presents a design strategy for genetic circuits whose mechanistic models contain **uncertain parameters** and **design parameters**. Observed data from previous designs, including non-functional prototypes, are used to infer a posterior distribution over uncertain parameters. Candidate design parameters are then optimized through Thompson sampling and ranked with risk-averse summaries of predictive loss, so final designs are chosen for performance under epistemic uncertainty and biomolecular noise.
 
-The package building blocks correspond to the publication workflow as follows:
+The package uses the same conceptual stages as the publication:
 
-- **Model the system**: YAML model files and `load_model` define the mechanistic model, states, equations, fixed parameters, uncertain parameters, and design parameters. This corresponds to the paper's split of model parameters into uncertain parameters and controllable design parameters.
-- **Compile and simulate**: `ModelDefinition`, `Model`, `SimulationSpec`, `setup_simulation!`, and `simulate!` provide the reusable ODE simulation layer used by inference, design scanning, and evaluation.
-- **Infer uncertain parameters**: `TuringSpec` and `run_inference` implement the Bayesian inference stage for parameters marked `uncertain`, producing posterior samples analogous to the paper's inferred parameter distribution.
-- **Define design goals**: the `loss` function supplied to `CartesianScanner` encodes the desired behavior, such as matching a set point, trajectory, amplitude, or frequency.
-- **Optimize designs with Thompson samples**: `CartesianScanner` and `run_scan` evaluate candidate design values for each posterior draw, matching the paper's Thompson-sampling idea in a grid-scan form.
-- **Evaluate and select robust designs**: the `run_scan` output records candidate values, resolved parameter values, losses, and best-design markers so downstream summaries can rank candidates by median loss, high quantiles, or other risk-aware criteria.
+- **Model the system**: YAML model files and `load_model` define the mechanistic model, states, equations, fixed parameters, uncertain parameters, and design parameters.
+- **Identify uncertain and design parameters**: YAML parameter `role`s encode the publication's split between uncertain parameters to infer and controllable design parameters to optimize.
+- **Infer uncertain parameters**: `TuringSpec` and `run_inference` use observed data to produce posterior samples for parameters marked `uncertain`.
+- **Define the design goal**: the `loss` function supplied to `CartesianScanner` encodes the desired circuit behavior, such as matching a set point, trajectory, amplitude, or frequency.
+- **Optimize designs via Thompson sampling**: `CartesianScanner` and `run_scan` evaluate candidate design values for each posterior draw. In this package, each best candidate for a posterior draw is a grid-based Thompson sample.
+- **Manage risk and select final designs**: the `run_scan` output records candidate values, resolved parameters, losses, and best-design markers so downstream summaries can rank designs by median loss, upper quantiles, or other risk-averse criteria.
 
 ## Reference Implementations
 
-The repository also keeps reference implementations for comparing the package workflow against earlier scripts. For these, the docs use a one-page starter style: a single script that shows the full setup, model definition, inference call, and saved output in one place. The current starter is [`experiments/reproduce_original_mk.jl`](https://github.com/MichalKobiela/UncertaintyOptimization.jl/blob/main/experiments/reproduce_original_code.jl), which reproduces the original adaptation-circuit inference workflow with newer Julia libraries.
+The repository also keeps reference implementations for comparing the package workflow against earlier scripts. For these, the docs use a one-page starter style: a single script that shows the full setup, mechanistic model, observed data, inference call, and saved output in one place. The current starter is [`experiments/reference/reproduce_original_code.jl`](https://github.com/MichalKobiela/UncertaintyOptimization.jl/blob/main/experiments/reference/reproduce_original_code.jl), which reproduces the adaptation-circuit inference workflow with newer Julia libraries and colocated reference data.
 
-The package workflow is organised around a small set of stages:
+The package workflow is organized around a small set of publication-facing stages:
 
 - load a symbolic model from YAML;
 - build and reuse simulations with `SimulationSpec` and `simulate!`;
-- infer uncertain parameters with `TuringSpec` and `run_inference`;
-- scan design candidates with `CartesianScanner` and `run_scan`;
-- evaluate selected candidates by reusing the same scan machinery.
+- infer uncertain parameters from observed data with `TuringSpec` and `run_inference`;
+- obtain Thompson samples by scanning design candidates with `CartesianScanner` and `run_scan`;
+- evaluate candidate designs and summarize predictive loss for risk-averse selection.
 
 See [YAML Model Files](@ref) for model-file structure, [Workflow](@ref) for the
 stage-by-stage guide, and [Reference](@ref) for generated API documentation.
