@@ -19,7 +19,7 @@ using AdvancedHMC: DenseEuclideanMetric
 
 
 # Load model
-RPA_model = load_model("./test/test-data/RPA_real/opt.yml")
+RPA_model = load_model("./test/test-data/RPA_real/cluster.yml")
 @mtkcompile sys = System(RPA_model.equations, t)
 model = Model(RPA_model, sys)
 
@@ -45,7 +45,6 @@ data_selected = vcat(
     data_frame.expression1000,
 ) .- 17.6 # adjust for background fluorescence
 
-nuts = NUTS(0.5, init_ϵ = 0.0065, max_depth=8)
 sim_spec = SimulationSpec(
     t_obs = data_frame.time,
     obs_state = :A,
@@ -60,7 +59,7 @@ turing_spec = TuringSpec(
     data = data_selected,
     noise_prior = InverseGamma(2, 3), 
     noise_initial = 3.0, 
-    sampler = NUTS(0.5, init_ϵ = 0.006, metricT = DenseEuclideanMetric),
+    sampler = NUTS(0.5, init_ϵ = 0.0065, max_depth=8, metricT = DenseEuclideanMetric),
     n_samples = 3000,
     n_chains = 1,
 )
@@ -69,6 +68,6 @@ Random.seed!(4)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a12_repr.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a14_cluster_maxdepth8.jls"), "w") do f
     serialize(f, chain)
 end
