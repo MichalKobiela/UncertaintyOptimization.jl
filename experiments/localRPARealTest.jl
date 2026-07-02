@@ -64,10 +64,10 @@ turing_spec = TuringSpec(
     n_chains = 1,
 )
 
-Random.seed!(4)
+Random.seed!(6)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a14_cluster_maxdepth8.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a15_cluster_maxdepth8_seed6_stableKx1_smoothpos.jls"), "w") do f
     serialize(f, chain)
 end
