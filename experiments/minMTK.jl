@@ -9,19 +9,21 @@ using OrdinaryDiffEq
 using Turing
 # using SciMLBase: VectorOfArray
 using SciMLStructures: Tunable, canonicalize, replace, replace!, Initials
-using SymbolicIndexingInterface: setp
+using SymbolicIndexingInterface: setp, variable_index
 using Random
 using Serialization
 using CSV, Tables, DataFrames
 using Plots
 using Distributions
 using AdvancedHMC: DenseEuclideanMetric
+using SciMLBase: successful_retcode
 
 
 Random.seed!(0);
 
 
 const SOLVER = AutoTsit5(Rosenbrock23(autodiff=false))
+const DTMIN = 1e-9
 
 @variables A(t) B(t) 
 @parameters alpha_1 [tunable = true]
@@ -47,14 +49,15 @@ const SOLVER = AutoTsit5(Rosenbrock23(autodiff=false))
 hill_eps = 1e-12
 production_scale = 0.02
 
-A_pos = max(A, 0)
-B_pos = max(B, 0)
-cuma_signal = 1 + cuma / kx1
+smooth_pos(x, eps) = 0.5 * (x + sqrt(x^2 + eps^2))
+
+A_pos = smooth_pos(A, hill_eps)
+B_pos = smooth_pos(B, hill_eps)
 
 log_hill(numerator, denominator, n, eps) =
     1 / (1 + exp(n * (log(numerator + eps) - log(denominator + eps))))
 
-hill_cuma = log_hill(kcymRtot, cuma_signal, nx1, hill_eps)
+hill_cuma = log_hill(kcymRtot * kx1, kx1 + cuma, nx1, hill_eps)
 hill_B_kx2 = log_hill(kx2, B_pos, nx2, hill_eps)
 hill_B_kx3 = log_hill(kx3, B_pos, nx2, hill_eps)
 hill_A_kr = log_hill(A_pos, kr, nr, hill_eps)
@@ -74,9 +77,9 @@ eqs = [
     D(B) ~ B_production - B_decay,
 ]
 
-@mtkcompile ns = System(eqs, t)
+@mtkcompile sys = System(eqs, t)
 
-ordered_params = [p for p in parameters(ns)]
+ordered_params = [p for p in parameters(sys)]
 
 guess_map = Dict{Symbol,Float64}(
     :alpha_1 => 83.4743,
@@ -121,18 +124,14 @@ prior_map = Dict{Symbol,Distribution}(
 
 u0 = [A => 24.0, B => 350.0]
 initial_params = Dict([p => guess_map[p.name] for p in ordered_params])
-prob = ODEProblem(ns, merge(Dict(u0), initial_params), (0.0, 10.0), jac=true, simplify=false)
+prob = ODEProblem(sys, merge(Dict(u0), initial_params), (0.0, 10.0), jac=true, simplify=false)
 
 # prepare cuma setter and priors
-tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(ns))]
+tunable_params = [p for p in ordered_params if p in Set(ModelingToolkit.tunable_parameters(sys))]
 tunable_priors = arraydist([prior_map[p.name] for p in tunable_params])
 
-cuma_setter! = setp(ns, [getproperty(ns, :cuma),])
-
-# find the states
-state_order = unknowns(ns)
-A_idx = findfirst(isequal(ns.A), state_order)
-B_idx = findfirst(isequal(ns.B), state_order)
+cuma_setter! = setp(sys, [getproperty(sys, :cuma),])
+const INITIAL_STATE_INDICES = [variable_index(sys, state) for state in (sys.A, sys.B)]
 
 # warm = solve(prob, Rosenbrock23())
 # # display(Plots.plot(sol))
@@ -156,20 +155,27 @@ B_idx = findfirst(isequal(ns.B), state_order)
     # Solve the ODE
     try
         cuma_setter!(p_work, (2e-6, ))
-        warm = solve(prob, SOLVER, p=p_work, dtmin=1e-12)
+        warm = solve(prob, SOLVER, p=p_work, dtmin=DTMIN, save_end=true, save_everystep=false, dense=false)
 
-        p_work = replace(Initials(), p_work, warm.u[end])
+        warm_initials = warm.u[end][INITIAL_STATE_INDICES]
+        p_work = replace(Initials(), p_work, warm_initials)
+        production_prob = remake(prob; tspan=(first(saveat), last(saveat)))
         
         cuma_setter!(p_work, (2e-5, ))
-        sol1 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
+        sol1 = solve(production_prob, SOLVER, p=p_work; dtmin=DTMIN, saveat=saveat)
 
         cuma_setter!(p_work, (0.0001, ))
-        sol2 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
+        sol2 = solve(production_prob, SOLVER, p=p_work; dtmin=DTMIN, saveat=saveat)
 
         cuma_setter!(p_work, (0.001, ))
-        sol3 = solve(prob, SOLVER, p=p_work; dtmin=1e-12, saveat=saveat)
+        sol3 = solve(production_prob, SOLVER, p=p_work; dtmin=DTMIN, saveat=saveat)
+
+        if any(sol -> !successful_retcode(sol), (sol1, sol2, sol3))
+            Turing.@addlogprob! -1e10
+            return nothing
+        end
         
-        data ~ MvNormal(vcat(sol1[A_idx,:], sol2[A_idx,:], sol3[A_idx,:]), σ^2 * I)
+        data ~ MvNormal(vcat(sol1[sys.A, :], sol2[sys.A, :], sol3[sys.A, :]), σ^2 * I)
     catch e
         # print(e)
         Turing.@addlogprob! -1e10
@@ -199,7 +205,7 @@ initial_params_draws = (;
 
 Random.seed!(4)
 sampler = NUTS(0.5,init_ϵ = 0.005, metricT = DenseEuclideanMetric)
-chain_1 = sample(model, sampler , MCMCSerial(), 3, 1, initial_params = [InitFromParams(initial_params_draws)])
+chain_1 = sample(model, sampler , MCMCSerial(), 3000, 1, initial_params = [InitFromParams(initial_params_draws)])
 
 rename_map = Dict(
     Symbol("draws[$i]") => tunable_params[i].name
@@ -207,6 +213,6 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_r12_rewritten_start.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r14_rewritten_order.jls", "w")
 serialize(f, chain_named)
 close(f)
