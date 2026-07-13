@@ -5,6 +5,7 @@ DocMeta.setdocmeta!(UncertaintyOptimization, :DocTestSetup, :(using UncertaintyO
 
 makedocs(;
     modules=[UncertaintyOptimization],
+    checkdocs=:exports,
     authors="Michal Kobiela <michal@walls.com.pl>, Mateusz K. Bieniek, Emma Pead and contributors",
     sitename="UncertaintyOptimization.jl",
     format=Documenter.HTML(;

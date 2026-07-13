@@ -24,11 +24,6 @@ model = Model(model_def, sys)
 The same `Model` can then be used for simulation, Turing inference, Thompson
 sampling scans, and evaluation scans.
 """
-
-# -------------------------------------------------------------------------
-# Struct Definitions
-# -------------------------------------------------------------------------
-
 mutable struct Model
     model_def::ModelDefinition
     sys:: Any # Compiled ModellingToolkit system

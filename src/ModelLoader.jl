@@ -376,7 +376,6 @@ The returned definition is not yet an executable ODE problem. Compile it and
 wrap it in a `Model`, then use `SimulationSpec`, `simulate!`, `TuringSpec`, or
 `CartesianScanner` for later workflow stages.
 """
-
 function load_model(filename::String)
     config = load_YAML(filename)
     validate_YAML(config)
