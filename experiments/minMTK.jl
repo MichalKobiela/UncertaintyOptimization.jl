@@ -49,18 +49,24 @@ const DTMIN = 1e-9
 hill_eps = 1e-12
 production_scale = 0.02
 
-smooth_pos(x, eps) = 0.5 * (x + sqrt(x^2 + eps^2))
+smooth_pos(x) = 0.5 * (x + sqrt(x^2 + hill_eps))
 
-A_pos = smooth_pos(A, hill_eps)
-B_pos = smooth_pos(B, hill_eps)
+A_pos = smooth_pos(A)
+B_pos = smooth_pos(B)
 
-log_hill(numerator, denominator, n, eps) =
-    1 / (1 + exp(n * (log(numerator + eps) - log(denominator + eps))))
+log_value(x) = log(x + hill_eps)
 
-hill_cuma = log_hill(kcymRtot * kx1, kx1 + cuma, nx1, hill_eps)
-hill_B_kx2 = log_hill(kx2, B_pos, nx2, hill_eps)
-hill_B_kx3 = log_hill(kx3, B_pos, nx2, hill_eps)
-hill_A_kr = log_hill(A_pos, kr, nr, hill_eps)
+log_hill(log_threshold, log_signal, n) =
+    1 / (1 + exp(n * (log_threshold - log_signal)))
+
+hill_cuma = log_hill(
+    log_value(kcymRtot),
+    log_value(kx1 + cuma) - log_value(kx1),
+    nx1,
+)
+hill_B_kx2 = log_hill(log_value(kx2), log_value(B_pos), nx2)
+hill_B_kx3 = log_hill(log_value(kx3), log_value(B_pos), nx2)
+hill_A_kr = log_hill(log_value(A_pos), log_value(kr), nr)
 
 A_cuma_factor = alpha_1 * hill_cuma + beta_1
 A_B_factor = alpha_2 * hill_B_kx2 + beta_2
@@ -213,6 +219,6 @@ rename_map = Dict(
 )
 chain_named = replacenames(chain_1, rename_map)
 
-f = open(string(@__DIR__)*"/minmtk_r14_rewritten_order.jls", "w")
+f = open(string(@__DIR__)*"/minmtk_r15_smoothpos_kx1_manualSimplifiedEq.jls", "w")
 serialize(f, chain_named)
 close(f)
