@@ -1,0 +1,50 @@
+experiment:
+  name: "Repressilator"
+  description: "Three-gene repressilator with shared uncertain kinetics and two design parameters"
+
+model:
+  type: "ODE"
+  states: ["A", "B", "C"]
+
+equations:
+  A: "k_transcription / (1 + (sqrt(C^2 + 1e-12) / K)^n) - k_degradation * A"
+  B: "k_transcription / (1 + (sqrt(A^2 + 1e-12) / K)^n) - k_degradation * B"
+  C: "k_transcription / (1 + (sqrt(B^2 + 1e-12) / K)^n) - k_degradation * C"
+
+simulation:
+  tspan: [0.0, 200.0]
+  solver: "Tsit5"
+
+parameters:
+  k_degradation:
+    value: 0.5
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 10.0
+
+  n:
+    value: 2.0
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 10.0
+
+  k_transcription:
+    value: 339.73478919014275
+    role: design
+    bounds: [100.0, 1000.0]
+
+  K:
+    value: 9.592328979688812
+    role: design
+    bounds: [0.01, 10.0]
+
+# The model has no external input. A constant dummy step keeps the YAML
+# compatible with the package's current model loader.
+inputs:
+  type: "step"
+  t_threshold: 0.0
+  values: [1.0, 1.0]
