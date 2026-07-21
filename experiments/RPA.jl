@@ -42,8 +42,12 @@ Local testing script for the RPA model as in the paper and repo here: https://gi
 
 """
 
-# Load model
-RPA_model = load_model(normpath(joinpath(@__DIR__, "..", "test", "test-data", "test_RPA.yml")))
+# Load model. This experiment applies a step input at t = 50.
+input = ifelse(t < 50, 1.0, 10.0)
+RPA_model = load_model(
+    normpath(joinpath(@__DIR__, "..", "test", "test-data", "test_RPA.yml"));
+    input,
+)
 
 # Compile the system once
 @mtkcompile sys = System(RPA_model.equations, t)

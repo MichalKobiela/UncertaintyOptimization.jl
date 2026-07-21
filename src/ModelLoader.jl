@@ -204,11 +204,13 @@ end
 # -------------------------------------------------------------------------
 
 """
-    build_symbolics(config)
+    build_symbolics(config; input=nothing)
 
-Build ModelingToolkit variables, parameters, and input expression from YAML data.
+Build ModelingToolkit variables and parameters from YAML data. When `input` is
+provided it is used as the model's symbolic input expression; otherwise an
+optional YAML `inputs` section is parsed.
 """
-function build_symbolics(config::Dict) 
+function build_symbolics(config::Dict; input=nothing)
 
   #  # Symbolic states
     state_symbs = config["model"]["states"] # Read in states from YAML and convert to MTK variable
@@ -249,13 +251,17 @@ function build_symbolics(config::Dict)
         param_specs[Symbol(pname_str)] = ParameterSpec(pname_str, param, role, value, warmup_value, bounds, prior, design)
     end
 
-    # Makes an input signal defined by the YAML
-    if config["inputs"]["type"] == "step"
-        input = ifelse(IV < config["inputs"]["t_threshold"],
-                config["inputs"]["values"][1],
-                config["inputs"]["values"][2])
-    else
-        error("❌ Unsupported input signal type: $(config["type"])")
+    # Preserve YAML-defined inputs for existing models, while allowing an
+    # experiment script to supply its input expression directly.
+    if isnothing(input) && haskey(config, "inputs")
+        input_config = config["inputs"]
+        if input_config["type"] == "step"
+            input = ifelse(IV < input_config["t_threshold"],
+                    input_config["values"][1],
+                    input_config["values"][2])
+        else
+            error("❌ Unsupported input signal type: $(input_config["type"])")
+        end
     end
 
     return (states=state_map, parameters=param_specs, input=input)
@@ -355,7 +361,7 @@ end
 # -------------------------------------------------------------------------
 
 """
-    load_model(filename::String) -> ModelDefinition
+    load_model(filename::String; input=nothing) -> ModelDefinition
 
 Load a model definition from YAML.
 
@@ -370,18 +376,19 @@ The YAML file describes the model structure:
 - `model`: model type and state names.
 - `parameters`: fixed, uncertain, and design parameter metadata.
 - `equations`: right-hand sides for each state equation.
-- `inputs`: currently a step input signal.
+- `inputs`: an optional step input signal. A symbolic input may instead be
+  supplied with the `input` keyword.
 
 The returned definition is not yet an executable ODE problem. Compile it and
 wrap it in a `Model`, then use `SimulationSpec`, `simulate!`, `TuringSpec`, or
 `CartesianScanner` for later workflow stages.
 """
-function load_model(filename::String)
+function load_model(filename::String; input=nothing)
     config = load_YAML(filename)
     validate_YAML(config)
 
     info = get_model_info(config)
-    syms = build_symbolics(config)
+    syms = build_symbolics(config; input=input)
     eqs = build_equations(config, syms)
         
 

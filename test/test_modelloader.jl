@@ -154,3 +154,21 @@ end
     
     
 end
+
+@testset "Julia-defined input" begin
+    config = Dict(
+        "experiment" => Dict("name" => "External input"),
+        "model" => Dict("states" => ["X"]),
+        "parameters" => Dict(
+            "decay" => Dict("role" => "fixed", "value" => 0.1),
+        ),
+        "equations" => Dict("X" => "input - decay * X"),
+    )
+    input = ifelse(UncertaintyOptimization.IV < 5.0, 0.0, 1.0)
+
+    syms = UncertaintyOptimization.build_symbolics(config; input=input)
+    eqs = UncertaintyOptimization.build_equations(config, syms)
+
+    @test isequal(syms.input, input)
+    @test only(eqs) isa ModelingToolkit.Equation
+end
