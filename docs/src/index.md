@@ -12,6 +12,39 @@ Package for risk-averse optimization under uncertainty.
 
 This package accompanies the workflow described in [Risk-averse optimization of genetic circuits under uncertainty](https://www.cell.com/cell-systems/fulltext/S2405-4712(25)00309-6) by **Michal Kobiela**, **Diego A. Oyarzun**, and **Michael U. Gutmann**, published in *Cell Systems*. The paper presents a design strategy for genetic circuits whose mechanistic models contain **uncertain parameters** and **design parameters**. Observed data from previous designs, including non-functional prototypes, are used to infer a posterior distribution over uncertain parameters. Candidate design parameters are then optimized through Thompson sampling and ranked with risk-averse summaries of predictive loss, so final designs are chosen for performance under epistemic uncertainty (posterior uncertainty) and any additional stochasticity you include in the model or loss.
 
+## MTK Implementation
+
+The package uses [ModelingToolkit.jl](https://docs.sciml.ai/ModelingToolkit/stable/),
+or MTK, as the bridge between a model description and numerical simulation in
+Julia. YAML files describe states, equations, and parameter metadata. The
+package converts those declarations into symbolic ModelingToolkit equations,
+which are then compiled into a system and wrapped in a runtime `Model`.
+
+MTK provides several important advantages for this workflow:
+
+- **Symbolic model construction**: equations can be manipulated and inspected
+  before numerical simulation.
+- **Consistent parameter and state handling**: symbolic names provide a stable
+  interface for fixed, uncertain, and design parameters.
+- **SciML integration**: compiled systems can be used to construct
+  `ODEProblem`s and solve them with the Julia differential-equation ecosystem.
+- **Analytic Jacobians**: MTK can derive Jacobians symbolically and provide them
+  to numerical solvers, avoiding finite-difference approximations and often
+  improving the efficiency and robustness of stiff ODE solves.
+- **Reusable numerical setup**: the compiled system, problem structure, and
+  parameter setters can be prepared once and reused across many simulations.
+- **A path to model transformations**: the same symbolic representation can
+  support simplification, automatic equation transformations, sensitivity
+  analysis, and extensions to larger mechanistic models.
+
+In Julia, MTK is part of the SciML ecosystem: it handles the symbolic layer,
+while packages such as OrdinaryDiffEq provide numerical solvers and Turing
+provides probabilistic inference. UncertaintyOptimization.jl connects these
+layers. `load_model` parses the YAML model, `Model` holds the compiled MTK
+system and reusable simulation state, `simulate!` solves the resulting model,
+and the inference and scan stages repeatedly evaluate it for posterior and
+design parameter values.
+
 The package workflow uses these stages:
 
 - **Model the system**: YAML model files and `load_model` define the mechanistic model, states, equations, fixed parameters, uncertain parameters, and design parameters.
