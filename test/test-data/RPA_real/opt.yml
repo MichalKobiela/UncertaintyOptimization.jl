@@ -169,8 +169,3 @@ parameters:
     design: # values to use during the design stage
       warmup_value: 2e-6
       value: 0.0003
-
-inputs:
-    type: "step"
-    t_threshold: 50
-    values: [1, 10]

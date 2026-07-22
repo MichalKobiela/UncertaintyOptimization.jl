@@ -116,9 +116,3 @@ parameters:
   cuma:
     value: 2.0e-6
     role: fixed
-
-inputs:
-    type: "step"
-    t_threshold: 50
-    values: [1,10]
-   
