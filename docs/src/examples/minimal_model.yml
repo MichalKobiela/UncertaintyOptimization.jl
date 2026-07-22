@@ -7,7 +7,7 @@ model:
   states: ["X"]
 
 equations:
-  X: "drive * dose * input - decay * X + baseline"
+  X: "drive * dose - decay * X + baseline"
 
 parameters:
   drive:
@@ -34,8 +34,3 @@ parameters:
   baseline:
     value: 0.1
     role: fixed
-
-inputs:
-  type: "step"
-  t_threshold: 5.0
-  values: [0.0, 1.0]

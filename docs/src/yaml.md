@@ -28,7 +28,7 @@ model:
   states: ["X"]
 
 equations:
-  X: "drive * dose * input - decay * X + baseline"
+  X: "drive * dose - decay * X + baseline"
 
 parameters:
   drive:
@@ -56,10 +56,6 @@ parameters:
     value: 0.1
     role: fixed
 
-inputs:
-  type: "step"
-  t_threshold: 5.0
-  values: [0.0, 1.0]
 ```
 
 Load and compile it in the same way as any other model:
@@ -85,16 +81,12 @@ variable.
 
 `equations` maps each state name to the right-hand side of its differential
 equation. Equations are Julia expressions written as strings and may refer to
-states, parameters, and the generated `input` signal.
+states and parameters.
 
 `parameters` defines every parameter used by the equations. Each parameter has a
 `role`, and may also define values, priors, bounds, warmup values, and
 design-stage metadata. This is where uncertain parameters and design parameters
 enter the workflow.
-
-`inputs` defines the input signal. The current loader supports a step input:
-before `t_threshold` it uses `values[1]`, and after that threshold it uses
-`values[2]`.
 
 ## Parameter Roles
 
