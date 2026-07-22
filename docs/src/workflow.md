@@ -36,7 +36,6 @@ Required model sections are:
 - `model`: model type and state names.
 - `parameters`: parameter values, roles, priors, and optional design metadata.
 - `equations`: one right-hand-side expression for each declared state.
-- `inputs`: currently a step input signal.
 
 Parameter roles encode how each parameter is used:
 
@@ -70,7 +69,7 @@ which builds and caches the `ODEProblem` and the parameter setters used by later
 calls.
 
 ```julia
-using OrdinaryDiffEq
+using OrdinaryDiffEq: Rosenbrock23
 
 simulation = SimulationSpec(
     t_obs = collect(range(1.0, 90.0, length = 30)),
@@ -83,12 +82,6 @@ simulation = SimulationSpec(
 
 sols = simulate!(model, simulation)
 ```
-
-Warmup values and tuple-valued staged parameters are taken from the YAML
-parameter metadata. `SimulationSpec.tspan` may also use separate warmup and
-production intervals; see [Warmup And Production Time Spans](@ref). With
-`return_simulate = true`, `simulate!` returns both the optional warmup solution
-and the production solutions.
 
 These simulated trajectories are the model predictions compared with observed
 data during inference and with target behavior during design evaluation.
@@ -103,8 +96,8 @@ For Turing-based Bayesian inference, create a `TuringSpec` from a
 `SimulationSpec` and observed data, then call `run_inference`.
 
 ```julia
-using Distributions
-using Turing
+using Distributions: InverseGamma
+using Turing: NUTS
 
 turing_spec = TuringSpec(
     simulation = simulation,
@@ -225,8 +218,8 @@ For example, the median loss approximates typical predictive performance, while
 an upper quantile such as the 75% quantile is a risk-averse summary:
 
 ```julia
-using DataFrames
-using Statistics
+using DataFrames: combine, groupby
+using Statistics: median, quantile
 
 risk_summary = combine(
     groupby(evaluation_results, :kx2_scaler),
@@ -239,9 +232,16 @@ Candidates with low median loss and low upper-quantile loss are robust designs:
 they are predicted to work well on average and to avoid large losses under
 unfavorable posterior draws.
 
-## Warmup And Production Time Spans
+## Deeper Dive
 
-When warmup and production need different time spans, pass a pair of intervals to
+### Warmup And Production Time Spans
+
+The warmup stage is activated by specifying a `warmup_value` for a parameter in
+the YAML model. Parameters can have separate values for the warmup and
+production stages: use `warmup_value` for the warmup solve and `value` for the
+production solve. This applies to as many parameters as need staged values.
+
+When warmup and production need different time spans, pass two intervals to
 `SimulationSpec.tspan`. The first interval is used for the warmup solve, and the
 second interval is used for each production solve.
 
@@ -255,10 +255,14 @@ simulation = SimulationSpec(
 )
 ```
 
-A single interval, such as `tspan = (0.0, 100.0)`, is used for both warmup and
-production.
+If only one interval is provided, such as `tspan = (0.0, 100.0)`, it is expanded
+to `((0.0, 100.0), (0.0, 100.0))` and used for both warmup and production.
 
-## API Naming Notes
+If you want to inspect the warmup trajectory, pass `return_simulate = true` to
+`simulate!`. In that case, `simulate!` returns `(warmup_sol, sols)`, where
+`warmup_sol` is `nothing` when no warmup values are configured.
+
+### API Naming Notes
 
 The workflow examples use `CartesianScanner` as the public name for grid-based
 candidate evaluation. `CartesianScanner` is an alias for `ThompsonGridSpec`,
