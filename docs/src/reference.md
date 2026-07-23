@@ -31,8 +31,7 @@ Compile the equations from the loaded model definition with ModelingToolkit's
 the SciML simulation layer.
 
 ```julia
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t
+using ModelingToolkit: @mtkcompile, System, t_nounits as t
 
 model_def = load_model("model.yml")
 @mtkcompile sys = System(model_def.equations, t)

@@ -61,8 +61,7 @@ parameters:
 Load and compile it in the same way as any other model:
 
 ```julia
-using ModelingToolkit
-using ModelingToolkit: t_nounits as t
+using ModelingToolkit: @mtkcompile, System, t_nounits as t
 using UncertaintyOptimization
 
 model_def = load_model("docs/src/examples/minimal_model.yml")

@@ -12,7 +12,7 @@ Package for risk-averse optimization under uncertainty.
 
 This package accompanies the workflow described in [Risk-averse optimization of genetic circuits under uncertainty](https://www.cell.com/cell-systems/fulltext/S2405-4712(25)00309-6) by **Michal Kobiela**, **Diego A. Oyarzun**, and **Michael U. Gutmann**, published in *Cell Systems*. The paper presents a design strategy for genetic circuits whose mechanistic models contain **uncertain parameters** and **design parameters**. Observed data from previous designs, including non-functional prototypes, are used to infer a posterior distribution over uncertain parameters. Candidate design parameters are then optimized through Thompson sampling and ranked with risk-averse summaries of predictive loss, so final designs are chosen for performance under epistemic uncertainty (posterior uncertainty) and any additional stochasticity you include in the model or loss.
 
-## MTK Implementation
+## ModelingToolkit Integration
 
 The package uses [ModelingToolkit.jl](https://docs.sciml.ai/ModelingToolkit/stable/),
 or MTK, as the bridge between a model description and numerical simulation in
@@ -54,9 +54,9 @@ The package workflow uses these stages:
 - **Optimize designs via Thompson sampling**: `CartesianScanner` and `run_scan` evaluate candidate design values for each posterior draw. Each best candidate for a posterior draw is a grid-based Thompson sample.
 - **Manage risk and select final designs**: the `run_scan` output records candidate values, resolved parameters, losses, and best-design markers so downstream summaries can rank designs by median loss, upper quantiles, or other risk-averse criteria.
 
-## Reference Implementations
+## Reference Code
 
-The repository also keeps reference implementations for comparing the package workflow against earlier scripts. For these, the docs use a one-page starter style: a single script that shows the full setup, mechanistic model, observed data, inference call, and saved output in one place. The current starter is [`experiments/reference/reproduce_original_code.jl`](https://github.com/MichalKobiela/UncertaintyOptimization.jl/blob/main/experiments/reference/reproduce_original_code.jl), which reproduces the adaptation-circuit inference workflow with newer Julia libraries and colocated reference data.
+The repository also keeps reference code for comparing the package workflow against earlier scripts. For this code, the docs use a one-page starter style: a single script that shows the full setup, mechanistic model, observed data, inference call, and saved output in one place. The current starter is [`experiments/reference/reproduce_original_code.jl`](https://github.com/MichalKobiela/UncertaintyOptimization.jl/blob/main/experiments/reference/reproduce_original_code.jl), which reproduces the adaptation-circuit inference workflow with newer Julia libraries and colocated reference data.
 
 The package workflow is organized around a small set of stages:
 
@@ -68,6 +68,37 @@ The package workflow is organized around a small set of stages:
 
 See [YAML Model Files](@ref) for model-file structure, [Workflow](@ref) for the
 stage-by-stage guide, and [Reference](@ref) for generated API documentation.
+
+## Implementation
+
+The original code developed by **Michal Kobiela** was transformed and extended
+by **Mateusz Bieniek** and **Emma Pead** as part of the [**Data Intelligence
+Hub**](https://informatics.ed.ac.uk/ukri-cdt-in-biomedical-ai/data-intelligence-hub)
+in the School of Informatics at the University of Edinburgh. This work
+produced a more structured and reusable Julia package that integrates
+ModelingToolkit (MTK) with
+the SciML ecosystem, separating symbolic model construction from simulation,
+Bayesian inference, design scanning, and risk evaluation.
+
+Model definitions are expressed in YAML. This gives parameters an explicit
+structure, including their values, roles (`fixed`, `uncertain`, or `design`),
+priors, bounds, and staged warmup or production values. Equations are also
+declared in YAML and converted into symbolic MTK equations before the numerical
+problem is constructed. This makes models easier to inspect, modify, validate,
+and reuse across experiments.
+
+The codebase also includes a testing framework covering model loading,
+simulation, inference, scanning, staged parameters, and YAML validation. These
+tests, together with clearer interfaces, documented workflows, validation, and
+reusable simulation setup, improve the overall quality, maintainability, and
+reproducibility of the implementation.
+
+Performance has been improved by reusing compiled MTK systems and ODE problems,
+precomputing parameter setters, using analytic Jacobians where available, and
+reducing repeated setup work in inference and design scans. Bayesian inference
+has also been tuned for performance, including configuration and optimisation
+of the NUTS sampler for the model and data, while retaining the flexibility to
+adjust sampling settings for different experiments.
 
 ## Install
 
