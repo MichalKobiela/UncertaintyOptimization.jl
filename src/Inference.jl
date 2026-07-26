@@ -1,36 +1,47 @@
-
 """
-    Adaptor for the Inference process.
+    run_inference(model, spec)
 
-The spec provided to the run_inference function determines which method is called.
+Run an inference stage using the implementation selected by `spec`.
 
-Each file in algorithms will have a separate inference algorithm making adding new observations
-trivial.
+`model` should wrap a compiled ModelingToolkit system, and `spec` should be a
+concrete `InferenceSpec` such as `TuringSpec`. The concrete method prepares the
+model for simulation, repeatedly calls `simulate!` under the sampler, and
+returns posterior samples in the format produced by that backend.
 
-Only need to call run_inference(model::Model, spec::AbstractInference)
-
-Common functions for all inference procedures go here:
-
-1. Set up a simulation
-2. Solve for uncertain params
-
+This fallback method exists to make unsupported inference specifications fail
+with a clear error.
 """
-# Fallback function
 function run_inference(model::Model, spec::InferenceSpec)
     error("No inference implementation for $(typeof(spec)).")
 end
 
+"""
+    setup_model_for_inference(model, spec)
+
+Prepare a model for the simulation settings in an inference spec.
+
+Inference backends call this before sampling so the expensive ODE problem and
+parameter setters are built once and then reused for each proposed posterior
+draw.
+"""
 function setup_model_for_inference(model::Model, spec::InferenceSpec)
-    # Setup model simulation
-     setup_simulation!(
+    return setup_model_for_simulation(model, spec.simulation)
+end
+
+"""
+    setup_model_for_simulation(model, simulation)
+
+Build the reusable simulation problem for a model.
+
+This is a small bridge from spec-based workflows to `setup_simulation!`. It is
+used by inference and scan stages whenever the `Model` has not already cached an
+ODE problem for the requested `SimulationSpec`.
+"""
+function setup_model_for_simulation(model::Model, simulation::SimulationSpec)
+    setup_simulation!(
         model,
-        spec.t_obs,                 
-        spec.obs_state_idx,         
-        spec.initial_conditions,    
-        spec.uncertain_param_values,          
-        spec.tspan;                 
-        solver = spec.solver,       
-        dt= spec.dt            
+        simulation.initial_conditions,
+        simulation.tspan;
     )
     
     return nothing

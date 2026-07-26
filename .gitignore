@@ -1,6 +1,9 @@
 /Manifest*.toml
 /docs/Manifest*.toml
 /docs/build/
-/experiments/
-/test/test-data/
 /.vscode/
+*.jls
+*.pdf
+*.jlprof
+profiling
+.DS_Store

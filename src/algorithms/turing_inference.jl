@@ -1,0 +1,278 @@
+using Turing
+using Distributions
+# using DistributionsAD
+using DynamicPPL
+using SciMLBase: successful_retcode
+# using InteractiveUtils
+
+
+"""
+    run_inference(model, spec::TuringSpec)
+
+Run Bayesian inference with Turing.
+
+This method implements the inference stage for `TuringSpec`. It prepares the
+model for the shared `SimulationSpec`, builds priors for YAML parameters marked
+`:uncertain`, constructs the Turing model, samples with the configured sampler,
+and renames sampled chain columns from Turing's internal array names back to the
+model parameter symbols.
+
+The returned chain can be passed directly, or after thinning/subsampling, to
+`run_scan` for Thompson sampling and evaluation.
+"""
+function run_inference(model::Model, spec::TuringSpec)
+
+    @info "Running Turing inference"
+
+    # 1. Set up the model
+    setup_model_for_inference(model, spec)
+
+    # In the test RPA the order the parameters come out from the MTK system is
+    # not the same order as what the user puts in. This can lead to come confusion
+    # when writing to a file but the buffer function and setter doe not need a specific value it 
+    # goes by name.
+    
+    # TODO
+    # multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
+    # uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
+    # settable_params::Union{Nothing, Tuple{Vararg{Num}}}
+
+    # prepare priors for the uncertain parameters
+
+    initial_params = make_initial_params(model, spec)
+
+    # preallocate for the hot loop the results vector
+    results_num = isempty(model.multiparam_values) ? 1 : length(model.multiparam_values)
+    observed_data = vec(spec.data)
+    _validate_observation_layout(observed_data, spec.simulation, results_num)
+
+    prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
+
+    # 2. Build turing model
+    fit_fcn = fit(model, spec, model.tunable_priors, observed_data;
+        prealloc_results_vector=prealloc_results_vector)
+    #fit_fcn = optim_model()
+
+    # Turing.setprogress!(true)
+    
+    # 3. Run sampling
+    chain = sample(
+        fit_fcn,
+        spec.sampler,
+        spec.sampling_method,
+        spec.n_samples,
+        spec.n_chains;
+        progress=true,
+        initial_params=initial_params
+    )
+
+
+    # rename the chain draws to the correct variables
+    rename_map = Dict(
+        Symbol("uncertain_sampled_values[$i]") => model.tunable_symbols[i] for i in eachindex(model.tunable_symbols)
+    )
+    chain_named = replacenames(chain, rename_map)
+    
+    return chain_named
+end
+
+"""
+    make_initial_params(model, spec)
+
+Build Turing initial parameters from model tunable defaults.
+
+Initial uncertain-parameter values are ordered to match the compiled system's
+tunable parameters. Values supplied in
+`spec.simulation.uncertain_param_values` take precedence over YAML defaults.
+The observation noise starts at `spec.noise_initial`.
+"""
+function make_initial_params(model::Model, spec::TuringSpec)
+    priors = make_priors(model)
+    tunable_initial = make_initial_tunable_values(model, spec, priors)
+    validate_initial_tunables(model.tunable_symbols, tunable_initial, priors)
+
+    initial_params = InitFromParams((
+        σ=spec.noise_initial,
+        uncertain_sampled_values=collect(tunable_initial),
+    ))
+
+    return fill(initial_params, spec.n_chains)
+end
+
+function make_initial_tunable_values(model::Model, spec::TuringSpec, priors)
+    overrides = _normalize_parameter_overrides(spec.simulation.uncertain_param_values)
+    initial_values = Vector{Float64}(undef, length(model.tunable_symbols))
+
+    for (i, symbol) in enumerate(model.tunable_symbols)
+        has_override = haskey(overrides, symbol)
+        candidate = has_override ? overrides[symbol] : model.tunable_initial[i]
+        initial_values[i] = sampler_initial_value(symbol, candidate, priors[i]; from_override=has_override)
+    end
+
+    return Tuple(initial_values)
+end
+
+function sampler_initial_value(symbol::Symbol, value::Real, prior::Uniform; from_override::Bool=false)
+    initial_value = Float64(value)
+    lower = minimum(prior)
+    upper = maximum(prior)
+
+    if lower < initial_value < upper
+        return initial_value
+    end
+
+    if from_override
+        error(
+            "Initial override for uncertain parameter $symbol must be strictly inside " *
+            "Uniform($lower, $upper); got $initial_value. Turing cannot initialize " *
+            "NUTS exactly on a constrained boundary."
+        )
+    end
+
+    return mean(prior)
+end
+
+function sampler_initial_value(symbol::Symbol, value::Real, prior; from_override::Bool=false)
+    initial_value = Float64(value)
+
+    if isfinite(logpdf(prior, initial_value))
+        return initial_value
+    end
+
+    if from_override
+        error("Initial override for uncertain parameter $symbol is outside its prior support: value=$initial_value, prior=$prior.")
+    end
+
+    fallback = try
+        Float64(mean(prior))
+    catch
+        error("No valid initial value found for uncertain parameter $symbol. Provide a value in spec.simulation.uncertain_param_values.")
+    end
+
+    if !isfinite(logpdf(prior, fallback))
+        error("No valid initial value found for uncertain parameter $symbol. Provide a value in spec.simulation.uncertain_param_values.")
+    end
+
+    return fallback
+end
+
+# -------------------------------------------------------------------------
+# Turing model
+# -------------------------------------------------------------------------
+
+"""
+    fit(model, spec, uncertain_priors, data)
+
+Turing model used by `run_inference`.
+
+For each posterior proposal, this model calls `simulate!` with the proposed
+uncertain parameters, flattens the saved observations, validates that the solve
+was successful, and scores the supplied data under a Gaussian observation model.
+"""
+@model function fit(model, spec, uncertain_priors, data; 
+    prealloc_results_vector::Union{Vector{SciMLBase.ODESolution}, Nothing}=nothing,
+    )
+
+    σ ~ spec.noise_prior
+     
+    # FIXME - move arraydist to the outside
+    uncertain_sampled_values ~ uncertain_priors
+
+    simulation = spec.simulation
+
+    # @code_warntype 
+    sols = simulate!(model, simulation.initial_conditions, simulation.tspan;
+        # parameters = drawn_params,
+        solver=simulation.solver, 
+        # dt=spec.dt, 
+        saveat=simulation.t_obs, 
+        # inference
+        solver_opts = simulation.solver_opts,
+        save_idxs = observed_state_save_idxs(model.sys, simulation),
+        sampled_uncertain_params = uncertain_sampled_values,
+        prealloc_results_vector = prealloc_results_vector,
+        )
+
+    # all solves succeeded
+    if any(sol -> !successful_retcode(sol), sols)
+        Turing.@addlogprob! -1e10
+        return
+    end
+
+    predicted = _predicted_observations(sols, simulation)
+
+    # empty the results for the next run
+    # empty!(sols)
+
+        # 2. predicted/data are vectors of same length
+    if !(predicted isa AbstractVector)
+        @debug "Predicted observations are not an AbstractVector" predicted_type=typeof(predicted)
+        #Turing.@addlogprob! -Inf
+        Turing.@addlogprob! -1e10
+        return
+    end
+
+    if length(predicted) != length(data)
+        @debug "Predicted observations and data have different lengths" predicted_size=size(predicted) data_size=size(data) predicted_length=length(predicted) data_length=length(data)
+        Turing.@addlogprob! -1e10
+        return
+    end
+
+    # finite values only
+    if !all(isfinite, predicted) || !isfinite(σ) || σ <= 0
+        @debug "Predicted observations or noise scale are invalid" all_predicted_finite=all(isfinite, predicted) sigma=σ
+        Turing.@addlogprob! -1e10
+        return
+    end    
+
+    data ~ MvNormal(predicted, σ^2 * I)
+end
+
+"""
+    _predicted_observations(sols, simulation) -> Vector
+
+Flatten observed states from one or more saved solutions.
+
+The order is solution-major, then observed-state-major, then time-major. This
+is the same layout expected by `_validate_observation_layout`.
+"""
+function _predicted_observations(sols, simulation::SimulationSpec)
+    if isempty(sols)
+        return Float64[]
+    end
+
+    saved_state_positions = 1:observed_state_count(simulation)
+    return reduce(vcat, (vec(sol[state_position, :]) for sol in sols for state_position in saved_state_positions))
+end
+
+"""
+    _validate_observation_layout(data, simulation, n_solutions)
+
+Check that observed data length matches time points, states, and solution count.
+
+This catches mismatches before the sampler starts, which is especially useful
+when a YAML parameter has tuple-valued staged production solves.
+"""
+function _validate_observation_layout(data, simulation::SimulationSpec, n_solutions::Integer)
+    block_length = length(simulation.t_obs) * observed_state_count(simulation)
+
+    if length(data) % block_length != 0
+        error(
+            "Inference data length $(length(data)) does not match SimulationSpec: " *
+            "expected a multiple of $block_length " *
+            "($(length(simulation.t_obs)) time points * $(observed_state_count(simulation)) observed state(s))."
+        )
+    end
+
+    data_solution_count = div(length(data), block_length)
+    if data_solution_count != n_solutions
+        error(
+            "Inference data contains $data_solution_count solution block(s), " *
+            "but the simulation will produce $n_solutions. Check SimulationSpec.obs_state " *
+            "and model multiparameter values."
+        )
+    end
+
+    return nothing
+end
+    

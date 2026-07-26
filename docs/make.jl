@@ -5,7 +5,8 @@ DocMeta.setdocmeta!(UncertaintyOptimization, :DocTestSetup, :(using UncertaintyO
 
 makedocs(;
     modules=[UncertaintyOptimization],
-    authors="Michal Kobiela <michal@walls.com.pl> and contributors",
+    checkdocs=:exports,
+    authors="Michal Kobiela <michal@walls.com.pl>, Mateusz K. Bieniek, Emma Pead and contributors",
     sitename="UncertaintyOptimization.jl",
     format=Documenter.HTML(;
         canonical="https://MichalKobiela.github.io/UncertaintyOptimization.jl",
@@ -14,6 +15,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Workflow" => "workflow.md",
+        "YAML Models" => "yaml.md",
         "Reference" => "reference.md"
     ],
 )

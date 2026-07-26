@@ -1,0 +1,171 @@
+experiment:
+  name: "RPA"
+  description: "A two gene robust perfect adaptation circuit with real data"
+
+model:
+    type: "ODE" # Can be an "SDE" or "ReactionSystem"
+    states: ["A", "B"]
+
+equations:
+  A: |
+    0.02 * (alpha_1 / (1 + exp(nx1 * (log(kcymRtot + 1e-12) - (log(kx1 + cuma + 1e-12) - log(kx1 + 1e-12))))) + beta_1) *
+          (alpha_2 / (1 + exp(nx2 * (log(kx2 + 1e-12) - log(((B + sqrt(B^2 + 1e-12)) / 2) + 1e-12)))) + beta_2) -
+          0.02 * r1 * ((A + sqrt(A^2 + 1e-12)) / 2)
+
+  B: |
+    0.02 * (alpha_3 / (1 + exp(nx2 * (log(kx3 + 1e-12) - log(((B + sqrt(B^2 + 1e-12)) / 2) + 1e-12)))) + beta_3) *
+          (alpha_4 / (1 + exp(nr * (log(((A + sqrt(A^2 + 1e-12)) / 2) + 1e-12) - log(kr + 1e-12)))) + beta_4) -
+          0.1 * r2 * ((B + sqrt(B^2 + 1e-12)) / 2)
+
+simulation:
+    tspan: [0.0, 10.0]
+    solver: "Rosenbrock23"
+
+# Parameters initialized from iteration 1419, based on similarity score.
+parameters:
+  alpha_1:
+    value: 484.418408186227
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 2000.0
+
+  alpha_2:
+    value: 15.12961667214044
+    # value: 391.1627
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 250.0   # bug
+
+  alpha_3:
+    value: 5232.7026064534384
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1e4
+
+  alpha_4:
+    value: 4025670096364.3965
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1e13
+
+  beta_1:
+    value: 101.11623390755551
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 200.0
+
+  beta_2:
+    value: 7.7695833153548683
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 100.0
+
+  beta_3:
+    value: 934.21054716260517
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 5e3
+
+  beta_4:
+    value: 469.61617952418226
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 5000.0
+
+  kx1:
+    value: 1.6701489921875543e-08
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 3e-8
+
+  nx1:
+    value: 1.1442393794212218
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 1.0
+      upper: 5.0
+
+  kcymRtot:
+    value: 2.75e3
+    role: fixed
+
+  kx2:
+    value: 8467.7265501319598
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1e4
+    # role: design
+    # bounds: [0.0, 1e4]
+
+  nx2:
+    value: 2.5169848061523514
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 1.0
+      upper: 10.0
+
+  kr:
+    value: 9.6100719538937849
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 100.0
+
+  nr:
+    value: 76.319830805211154
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 1.0
+      upper: 100.0
+
+  r1:
+    value: 259.25540339032256
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1000.0
+
+  r2:
+    value: 107.44008450924761
+    role: uncertain
+    prior:
+      distribution: uniform
+      lower: 0.0
+      upper: 1000.0
+
+  kx3:
+    value: 4006.9
+    role: fixed
+  
+  cuma:
+    warmup_value: 2e-6
+    value: [2e-5, 0.0001, 0.001]
+    role: fixed
+    design: # values to use during the design stage
+      warmup_value: 2e-6
+      value: 0.0003

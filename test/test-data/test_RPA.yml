@@ -7,8 +7,8 @@ model:
     states: ["A", "B"]
 
 equations:
-    A: "alpha_1*(1/(1+(K_TF/(1+(input/K_IR)))^n_RA) + beta_RA)*(1/((K_BA/B)^n_BA + 1) + beta_BA) - gamma_A*A"
-    B: "alpha_2*(1/(1+(A/K_AB)^n_AB) + beta_AB)*(1/((K_BB/B)^n_BB + 1) + beta_BB) - gamma_B*B"
+    A: "alpha_1*(1/(1+exp(n_RA*(log(K_TF + 1e-12) - log(1 + input / K_IR + 1e-12)))) + beta_RA)*(1/(1+exp(n_BA*(log(K_BA + 1e-12) - log(B + 1e-12)))) + beta_BA) - gamma_A*A"
+    B: "alpha_2*(1/(1+exp(n_AB*(log(A + 1e-12) - log(K_AB + 1e-12)))) + beta_AB)*(1/(1+exp(n_BB*(log(K_BB + 1e-12) - log(B + 1e-12)))) + beta_BB) - gamma_B*B"
 
 simulation:
     tspan: [0.0, 100.0]
@@ -16,12 +16,12 @@ simulation:
 
 parameters:
   alpha_1:
-    value: 100
+    value: 100.0
     role: design
     bounds: [10.0, 200.0]
 
   alpha_2:
-    value: 100
+    value: 100.0
     role: design
     bounds: [10.0, 200.0]
 
@@ -103,9 +103,3 @@ parameters:
     value: 1.0
     role: design
     bounds: [0.1, 10.0]
-
-inputs:
-    type: "step"
-    t_threshold: 50
-    values: [1,10]
-   

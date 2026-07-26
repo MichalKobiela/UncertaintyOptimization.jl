@@ -45,13 +45,13 @@ using .MockRPA
                             dt=0.01)
 
 
-            println(model.prob.u0)       # initial conditions
-            println(model.prob.tspan)    # time span
-            println(model.prob.p)        # parameters
+            @debug "Initial conditions" u0=model.prob.u0
+            @debug "Time span" tspan=model.prob.tspan
+            @debug "Parameters" parameters=model.prob.p
 
-            println(equations(model.sys))
-            println(unknowns(model.sys))
-            println(parameters(model.sys))
+            @debug "Model equations" equations=equations(model.sys)
+            @debug "Model unknowns" unknowns=unknowns(model.sys)
+            @debug "Model parameters" parameters=parameters(model.sys)
 
 
         #Check the parameters have the correct starting values
@@ -63,7 +63,7 @@ using .MockRPA
    
 
     uncertain_syms = model.uncertain_params
-    println(uncertain_syms)
+    @debug "Uncertain symbols" uncertain_syms
 
     buffer_fcn = model.buffer_func
 
@@ -76,8 +76,8 @@ using .MockRPA
 
     p_test = [0.01, 0.003, 0.02, 0.004] 
     buffer = model.buffer_func(p_test)
-    println(parameters(model.sys))
-    println(buffer)
+    @debug "Model parameters" parameters=parameters(model.sys)
+    @debug "Parameter buffer" buffer
 
     #TO DO: WRITE AUTO TEST TO MAKE SURE THAT THE PARAMETERS GET UPDATED BY NAME FROM THE BUFFER
 
@@ -109,7 +109,7 @@ end
 #         @test inf_prob.t_obs === nothing
 #         @test inf_prob.chain === nothing
         
-#         println("✅ InferenceProblem created with defaults")
+#         @info "InferenceProblem created with defaults"
 #     end
 
 # end
@@ -129,7 +129,7 @@ end
         
 #         set_data!(inf_prob, data, times)
         
-#         println("✅ set_data!() stores data correctly")
+#         @info "set_data!() stores data correctly"
 #     end
     
 
@@ -146,7 +146,7 @@ end
 #         # Inf in data should error
 #         @test_throws ErrorException set_data!(inf_prob, [1.0, Inf, 3.0], [0.0, 1.0, 2.0])
         
-#         println("set_data!() validates inputs")
+#         @info "set_data!() validates inputs"
 #     end
 
 # end

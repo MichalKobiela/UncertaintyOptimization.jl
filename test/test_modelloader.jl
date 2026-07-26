@@ -1,19 +1,16 @@
 using Test
 using YAML
 using ModelingToolkit
-using IOCapture
 
 
 
 @testset "YAML Loading" begin
     # Test for missing file and an error being gracefully handled
     missing_file = "i-dont-exists-file.yml"
-    output = IOCapture.capture() do 
+    @test_logs (:warn, r"File not found") begin
         config = UncertaintyOptimization.load_YAML(missing_file)
         @test config == nothing
     end
-    println(output)
-    @test occursin("❌  File with the name $missing_file not found, please check if the input path is correct and the file exists",output.output)
     
     # Test that it loads an a real file returning a Dict
     filename = joinpath(@__DIR__, "test-data", "test_RPA.yml")
@@ -50,7 +47,36 @@ end
             "k1" => Dict("role"=>"fixed","value"=>0.1),
             "k2" => Dict("role"=>"fixed","value"=>0.2),
             "k3" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
-            "k4" => Dict("role"=>"design","bounds"=>[0.0,1.0])
+            "k4" => Dict("role"=>"design","bounds"=>[0.0,1.0]),
+            "k5" => Dict(
+                "role" => "fixed",
+                "value" => 0.5,
+                "design" => Dict(
+                    "value" => 0.6,
+                ),
+            ),
+            "kx2" => Dict(
+                "role" => "uncertain",
+                "value" => 36.4063,
+                "prior" => Dict(
+                    "distribution" => "uniform",
+                    "lower" => 0.0,
+                    "upper" => 1e4,
+                ),
+            ),
+            "kx3" => Dict(
+                "role" => "fixed",
+                "value" => 4006.9,
+            ),
+            "cuma" => Dict(
+                "role" => "fixed",
+                "warmup_value" => 2e-6,
+                "value" => 0.0001,
+                "design" => Dict(
+                    "warmup_value" => 2e-6,
+                    "value" => 0.0003,
+                ),
+            )
         ),
         "model" => Dict("states" => ["A", "B"]),
         "inputs" => Dict(
@@ -63,15 +89,46 @@ end
     symbolics = UncertaintyOptimization.build_symbolics(config)
 
 
-    for pname in ["k1", "k2", "k3", "k4"]
+    for pname in ["k1", "k2", "k3", "k4", "k5", "kx2", "kx3", "cuma"]
         param = Symbol(pname)
         @test isequal(symbolics.parameters[param].symbol, Symbolics.unwrap(first(@parameters $param)))
     end
+
+    @test isnothing(symbolics.parameters[:k1].design)
+    @test symbolics.parameters[:cuma].design isa UncertaintyOptimization.Design
+    @test symbolics.parameters[:cuma].design.warmup_value == 2e-6
+    @test symbolics.parameters[:cuma].design.value == 0.0003
+    @test symbolics.parameters[:cuma].warmup_value == 2e-6
+    @test symbolics.parameters[:cuma].value == 0.0001
+    @test isnothing(symbolics.parameters[:k5].design.warmup_value)
+    @test symbolics.parameters[:k5].design.value == 0.6
+    @test UncertaintyOptimization.get_warmup_params(symbolics.parameters) == Dict(:cuma => 2e-6)
+    @test UncertaintyOptimization.get_warmup_params(symbolics.parameters; design=true) == Dict(:cuma => 2e-6)
 
     for (s_sym, var_obj) in symbolics.states
         @test typeof(var_obj) <: SymbolicUtils.BasicSymbolic
     end
 
+end
+
+@testset "Deprecated design_optimise YAML" begin
+    config = Dict(
+        "parameters" => Dict(
+            "k" => Dict(
+                "role" => "design",
+                "value" => 1.0,
+                "design_optimise" => Dict("scalers" => "0.5:0.25:2.0"),
+            ),
+        ),
+        "model" => Dict("states" => ["X"]),
+        "inputs" => Dict(
+            "type" => "step",
+            "t_threshold" => 5.0,
+            "values" => [0.0, 1.0],
+        ),
+    )
+
+    @test_throws ErrorException UncertaintyOptimization.build_symbolics(config)
 end
 
  
@@ -98,3 +155,20 @@ end
     
 end
 
+@testset "Julia-defined input" begin
+    config = Dict(
+        "experiment" => Dict("name" => "External input"),
+        "model" => Dict("states" => ["X"]),
+        "parameters" => Dict(
+            "decay" => Dict("role" => "fixed", "value" => 0.1),
+        ),
+        "equations" => Dict("X" => "input - decay * X"),
+    )
+    input = ifelse(UncertaintyOptimization.IV < 5.0, 0.0, 1.0)
+
+    syms = UncertaintyOptimization.build_symbolics(config; input=input)
+    eqs = UncertaintyOptimization.build_equations(config, syms)
+
+    @test isequal(syms.input, input)
+    @test only(eqs) isa ModelingToolkit.Equation
+end
