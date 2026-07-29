@@ -259,6 +259,12 @@ numerically indistinguishable from the original corner. Any replacement changes
 the model near zero and must therefore be checked against simulations and
 posterior predictive behavior.
 
+Improving the posterior geometry in this way can make NUTS more efficient, not
+just more stable. Removing a nonsmooth construct such as `max(0, x)` gives the
+gradient a more continuous landscape, which can allow a larger step size, fewer
+numerical errors and divergences, and more effective samples per unit of
+computation. The replacement must still represent the intended scientific model.
+
 ### Hill Equations In The Log Domain
 
 For positive ``x``, a Hill activation can be written as
@@ -298,7 +304,7 @@ size (ESS), and ``\widehat R`` across chains.
 | Symptom | Likely response |
 |:---|:---|
 | Low acceptance or numerical errors | Increase target `δ`; then inspect equation smoothness and ODE failures. |
-| Frequent maximum tree depth | Improve scaling or the metric first; increase `max_depth` if trajectories remain valid. |
+| Frequent maximum tree depth | Improve posterior geometry, especially parameter scaling or the metric, first; increase `max_depth` if trajectories remain valid. |
 | High autocorrelation and low ESS | Improve parameterization or metric; then consider longer trajectories or more draws. |
 | Chains disagree or ``\widehat R`` remains high | Run longer warmup from dispersed starts and investigate multimodality. |
 | Dense metric is unstable | Add warmup, reduce dimension, regularize the model, or return to a diagonal metric. |
@@ -312,8 +318,8 @@ A useful tuning order is:
 4. Run adequate warmup with a diagonal metric and several chains.
 5. Tune target acceptance in the approximate range `0.65` to `0.9` using
    acceptance and numerical-error diagnostics.
-6. Address repeated depth saturation with a better metric or parameterization
-   before raising `max_depth`.
+6. Address repeated depth saturation by improving posterior geometry through
+   better scaling, metric choice, or parameterization before raising `max_depth`.
 7. Compare diagonal and dense metrics by ESS per second and posterior agreement.
 8. Increase retained samples only after the chains mix reliably.
 
