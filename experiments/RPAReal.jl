@@ -1,4 +1,3 @@
-using Revise
 using UncertaintyOptimization
 using ModelingToolkit
 using ModelingToolkit: t_nounits as t, D_nounits as D;
@@ -8,13 +7,9 @@ using Turing
 using SciMLBase: VectorOfArray
 using SymbolicIndexingInterface: setp
 using Random
-using PreallocationTools
 using Serialization
-using CSV, Tables
 using Plots
 using DataFrames
-using Profile
-using StatsPlots
 using AdvancedHMC: DenseEuclideanMetric
 
 
@@ -68,6 +63,6 @@ Random.seed!(6)
 
 chain = run_inference(model, turing_spec)
 
-open(joinpath(@__DIR__, "mtk_a15_cluster_maxdepth8_seed6_stableKx1_smoothpos.jls"), "w") do f
+open(joinpath(@__DIR__, "mtk_a16.jls"), "w") do f
     serialize(f, chain)
 end
