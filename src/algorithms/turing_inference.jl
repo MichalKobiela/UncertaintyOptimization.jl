@@ -1,9 +1,7 @@
 using Turing
 using Distributions
-# using DistributionsAD
 using DynamicPPL
 using SciMLBase: successful_retcode
-# using InteractiveUtils
 
 
 """
@@ -24,21 +22,10 @@ function run_inference(model::Model, spec::TuringSpec)
 
     @info "Running Turing inference"
 
-    # 1. Set up the model
+    # Set up the model
     setup_model_for_inference(model, spec)
 
-    # In the test RPA the order the parameters come out from the MTK system is
-    # not the same order as what the user puts in. This can lead to come confusion
-    # when writing to a file but the buffer function and setter doe not need a specific value it 
-    # goes by name.
-    
-    # TODO
-    # multiparams::Union{Nothing, Dict{Symbol, Tuple{Vararg{Float64}}}}
-    # uncertain_param_symbols::Union{Nothing, Tuple{Vararg{Symbol}}}
-    # settable_params::Union{Nothing, Tuple{Vararg{Num}}}
-
     # prepare priors for the uncertain parameters
-
     initial_params = make_initial_params(model, spec)
 
     # preallocate for the hot loop the results vector
@@ -48,10 +35,9 @@ function run_inference(model::Model, spec::TuringSpec)
 
     prealloc_results_vector = Vector{SciMLBase.ODESolution}(undef, results_num)
 
-    # 2. Build turing model
+    # Build turing model
     fit_fcn = fit(model, spec, model.tunable_priors, observed_data;
         prealloc_results_vector=prealloc_results_vector)
-    #fit_fcn = optim_model()
 
     # Turing.setprogress!(true)
     
@@ -65,7 +51,6 @@ function run_inference(model::Model, spec::TuringSpec)
         progress=true,
         initial_params=initial_params
     )
-
 
     # rename the chain draws to the correct variables
     rename_map = Dict(
@@ -174,17 +159,12 @@ was successful, and scores the supplied data under a Gaussian observation model.
     )
 
     σ ~ spec.noise_prior
-     
-    # FIXME - move arraydist to the outside
     uncertain_sampled_values ~ uncertain_priors
 
     simulation = spec.simulation
 
-    # @code_warntype 
     sols = simulate!(model, simulation.initial_conditions, simulation.tspan;
-        # parameters = drawn_params,
         solver=simulation.solver, 
-        # dt=spec.dt, 
         saveat=simulation.t_obs, 
         # inference
         solver_opts = simulation.solver_opts,
@@ -201,10 +181,6 @@ was successful, and scores the supplied data under a Gaussian observation model.
 
     predicted = _predicted_observations(sols, simulation)
 
-    # empty the results for the next run
-    # empty!(sols)
-
-        # 2. predicted/data are vectors of same length
     if !(predicted isa AbstractVector)
         @debug "Predicted observations are not an AbstractVector" predicted_type=typeof(predicted)
         #Turing.@addlogprob! -Inf
