@@ -12,6 +12,12 @@ Package for risk-averse optimization under uncertainty.
 
 This package accompanies the workflow described in [Risk-averse optimization of genetic circuits under uncertainty](https://www.cell.com/cell-systems/fulltext/S2405-4712(25)00309-6) by **Michal Kobiela**, **Diego A. Oyarzun**, and **Michael U. Gutmann**, published in *Cell Systems*. The paper presents a design strategy for genetic circuits whose mechanistic models contain **uncertain parameters** and **design parameters**. Observed data from previous designs, including non-functional prototypes, are used to infer a posterior distribution over uncertain parameters. Candidate design parameters are then optimized through Thompson sampling and ranked with risk-averse summaries of predictive loss, so final designs are chosen for performance under epistemic uncertainty (posterior uncertainty) and any additional stochasticity you include in the model or loss.
 
+## Install
+
+```julia-repl
+pkg> add https://github.com/MichalKobiela/UncertaintyOptimization.jl#1.0.0
+```
+
 ## ModelingToolkit Integration
 
 The package uses [ModelingToolkit.jl](https://docs.sciml.ai/ModelingToolkit/stable/),
@@ -99,9 +105,3 @@ reducing repeated setup work in inference and design scans. Bayesian inference
 has also been tuned for performance, including configuration and optimisation
 of the NUTS sampler for the model and data, while retaining the flexibility to
 adjust sampling settings for different experiments.
-
-## Install
-
-```julia-repl
-pkg> add https://github.com/MichalKobiela/UncertaintyOptimization.jl#v1.0.0
-```
